@@ -43,18 +43,65 @@ const SENTENCING_PRESETS = [
   { emoji: '💀', label: '대역죄', delta: 50 },
 ];
 
-// 커스텀 죄목 키워드 → 이모지/가산율 자동 추천 (위에서부터 먼저 걸리는 규칙 적용)
+// ── 커스텀 죄목 양형 추론 엔진 ──
+// 1) 문맥 규칙: 같은 명사라도 서술어에 따라 가산/공제가 갈리는 경우를 먼저 판별
+// 2) 카테고리 규칙: 위에서부터 먼저 걸리는 키워드 적용
+// 한 글자 키워드는 오탐지('토스', '서울' 등)를 만들므로 쓰지 않는다.
+const CUSTOM_CONTEXT_RULES = [
+  {
+    triggers: ['고기', '불판'],
+    branches: [
+      { keywords: ['안 구', '안 굽', '먹기만', '날름', '태움', '태웠'], emoji: '🥩', delta: 25, category: '고기 노동 기피/방화' },
+      { keywords: ['구움', '구웠', '구워', '자름', '잘랐', '볶음밥'], emoji: '🔥', delta: -25, category: '불판 집도 장인' },
+    ],
+  },
+  {
+    triggers: ['계산', '결제', '술값', '밥값', '택시비'],
+    branches: [
+      { keywords: ['안 냄', '빼돌', '화장실', '도망', '미룸', '척'], emoji: '🚽', delta: 35, category: '계산 회피 기동' },
+      { keywords: ['냄', '냈', '긁음', '긁었', '쏨', '쐈', '보태'], emoji: '💳', delta: -20, category: '쾌척/선결제' },
+    ],
+  },
+  {
+    triggers: ['지각', '늦게', '늦음', '늦었'],
+    // 송금 지연·후발대 합류는 아래 카테고리 규칙이 더 정확하므로 시간 문맥에서 제외
+    excludes: ['입금', '송금', '정산', '늦게 합류'],
+    branches: [
+      { keywords: ['안 늦', '지각 안', '일찍', '제시간'], emoji: '⏱️', delta: -10, category: '칼같은 시간 엄수' },
+      { keywords: null, emoji: '⏰', delta: 15, category: '코리안타임 지각' },
+    ],
+  },
+];
+
 const CUSTOM_KEYWORD_RULES = [
-  { keywords: ['지각', '늦'], emoji: '⏰', delta: 15 },
-  { keywords: ['화장실', '도망', '런', '먹튀'], emoji: '🚽', delta: 30 },
-  { keywords: ['토', '오바이트', '만취', '진상'], emoji: '🤮', delta: 40 },
-  { keywords: ['안주', '고기', '혼자', '다 먹'], emoji: '🍖', delta: 20 },
-  { keywords: ['전여친', '전남친', '전애인', '울', '눈물'], emoji: '😭', delta: 35 },
-  { keywords: ['담배'], emoji: '🚬', delta: 15 },
-  { keywords: ['솔로', '모솔'], emoji: '💔', delta: -10 },
-  { keywords: ['생일', '합격', '승진', '퇴사'], emoji: '🎉', delta: -25 },
-  { keywords: ['예약', '웨이팅', '운전', '대리', '택시'], emoji: '🚗', delta: -20 },
-  { keywords: ['사줌', '쐈', '커피', '2차'], emoji: '☕', delta: -25 },
+  // A. 대역죄 & 중범죄 가산세
+  { category: '구토/인사불성', emoji: '🤮', delta: 45, keywords: ['토했', '토함', '토하', '오바이트', '구토', '게워', '변기 잡고', '기절', '필름 끊', '인사불성', '만취 진상'] },
+  { category: '먹튀/무단탈주', emoji: '🏃', delta: 35, keywords: ['먹튀', '도망', '탈주', '막차런', '화장실런', '무단 귀가', '인사도 없이', '말 없이 집에', '증발', '튀었'] },
+  { category: '감정배설/눈물바다', emoji: '😭', delta: 35, keywords: ['전여친', '전남친', '전애인', '울었', '울음', '오열', '통곡', '눈물', '질질 짜', '하소연'] },
+  { category: '헌팅/합석/주사', emoji: '🚨', delta: 35, keywords: ['옆 테이블', '옆테이블', '헌팅', '합석', '번호 따', '시비', '고성방가', '소리 지', '진상'] },
+  { category: '분위기 갑분싸 떡밥', emoji: '💣', delta: 30, keywords: ['정치', '종교', '젠더', '군대 얘기', '훈수', '설교', '꼰대', '갑분싸', '싸움', '분위기 곱창'] },
+  { category: '물리적 테러/파손', emoji: '🌊', delta: 30, keywords: ['쏟음', '쏟았', '엎음', '엎었', '컵 깨', '잔 깨', '옷에 흘'] },
+  // B. 얄미움 & 생태계 교란 가산세
+  { category: '정산/송금 미루기', emoji: '💸', delta: 25, keywords: ['송금 안', '입금 안', '정산 안', '토스 안', '읽씹', '돈 안 보', '입금 늦', '송금 늦', '정산 늦'] },
+  { category: '메뉴/잔반 빌런', emoji: '🍲', delta: 25, keywords: ['시켜놓고 안', '남김', '남겼', '손도 안', '비싼 술', '비싼 안주', '혼자 시'] },
+  { category: '안주 독점/스틸', emoji: '🍖', delta: 20, keywords: ['혼자 다 먹', '싹쓸이', '건더기만', '고기만 골라', '안주발', '안주 킬러', '식사하러'] },
+  { category: '한입만/국자 강탈', emoji: '🥄', delta: 15, keywords: ['한 입만', '한입만', '맛만 본다', '뺏어 먹', '국자로'] },
+  { category: '술 밑장빼기/비율 테러', emoji: '🍺', delta: 15, keywords: ['꺾어 마', '물 타', '소맥 비율', '거품만', '술 안 마시', '입만 대'] },
+  { category: '노잼/도돌이표/구라', emoji: '🦜', delta: 20, keywords: ['했던 얘기', '또 말', '무한 반복', '허세', '구라', '거짓말', '노잼', '아재개그'] },
+  { category: '술자리 태업/수면', emoji: '💤', delta: 20, keywords: ['잠듦', '잠만', '자고 있', '꿀잠', '졸고', '게임 안', '술게임 룰'] },
+  { category: '사이버 망명/통화충', emoji: '📱', delta: 15, keywords: ['핸드폰만', '폰만 봄', '인스타만', '카톡만', '게임만', '통화하러', '전화 받으러'] },
+  { category: '흡연/자리 비움', emoji: '🚬', delta: 15, keywords: ['담배', '흡연', '전담', '밖에만 나', '자리 비'] },
+  { category: '당일 번복/장소 불평', emoji: '😒', delta: 15, keywords: ['장소 바꾸', '맛없다고', '불평', '투덜', '집에 가자고'] },
+  // C. 천사 & 우정 기여자 공제
+  { category: '주인공/경조사 우대', emoji: '🎂', delta: -30, keywords: ['생일', '승진', '합격', '이직', '취업', '퇴사 축하', '전역', '결혼', '청첩장'] },
+  { category: '2차/커피/해장 협찬', emoji: '☕', delta: -25, keywords: ['커피 쏨', '커피 샀', '해장', '아이스크림', '초코에몽', '숙취해소', '컨디션', '상쾌환', '인생네컷'] },
+  { category: '운전/대리/호송', emoji: '🚕', delta: -25, keywords: ['운전', '카풀', '태워 줌', '태워다', '택시 태워', '대리', '데려다'] },
+  { category: '수발/서빙 천사', emoji: '🦐', delta: -20, keywords: ['새우 까', '껍질 까', '게살', '쌈 싸', '물 떠', '물 챙', '앞접시', '수저 세팅', '소맥 말아'] },
+  { category: '예약/웨이팅/장소 섭외', emoji: '📅', delta: -15, keywords: ['예약', '웨이팅', '줄 서', '자리 잡', '맛집 찾', '총무'] },
+  { category: '후발대/짧은 체류 참작', emoji: '🏃‍♂️', delta: -25, keywords: ['야근하고', '늦게 합류', '막판에 합류', '30분만', '잠깐 얼굴만', '먼저 일어'] },
+  { category: '장거리 상경/귀가 복지', emoji: '🚇', delta: -15, keywords: ['집이 멀', '제일 멀', '서울 끝', '경기도', '인천', '수원', '지방에서', '막차 끊'] },
+  { category: '눈물겨운 사정 복지', emoji: '🩹', delta: -15, keywords: ['차임', '이별', '헤어짐', '실연', '백수', '취준생', '거지', '통장 잔고', '다이어트 중', '모솔', '솔로'] },
+  { category: '분위기 메이커', emoji: '🤣', delta: -15, keywords: ['웃겨', '하드캐리', '텐션', '분위기 살', '리액션', '선물 챙'] },
 ];
 const LOADING_DURATION = 3000;
 const LOADING_INTERVAL = 750;
@@ -410,12 +457,32 @@ const customLoadingMessage = (name, tag) => {
   return `${name}님의 '${tag.label}' 미담 사례 진위 여부 확인 중...`;
 };
 
+const stripSpaces = (str) => str.replace(/\s+/g, '');
+
+// 띄어쓰기를 안 해도 걸리도록 공백 제거본도 함께 비교 ('한입만', '옆테이블' 등)
+const findKeyword = (text, compact, keywords) =>
+  keywords.find((k) => text.includes(k) || compact.includes(stripSpaces(k)));
+
 function detectCustomPreset(label) {
-  const text = label.trim();
+  const text = label.trim().replace(/\s+/g, ' ');
   if (!text) return null;
+  const compact = stripSpaces(text);
+
+  for (const rule of CUSTOM_CONTEXT_RULES) {
+    const trigger = findKeyword(text, compact, rule.triggers);
+    if (!trigger) continue;
+    if (rule.excludes && findKeyword(text, compact, rule.excludes)) continue;
+    for (const branch of rule.branches) {
+      const keyword = branch.keywords ? findKeyword(text, compact, branch.keywords) : trigger;
+      if (keyword) {
+        return { emoji: branch.emoji, delta: branch.delta, keyword, category: branch.category };
+      }
+    }
+  }
+
   for (const rule of CUSTOM_KEYWORD_RULES) {
-    const keyword = rule.keywords.find((k) => text.includes(k));
-    if (keyword) return { emoji: rule.emoji, delta: rule.delta, keyword };
+    const keyword = findKeyword(text, compact, rule.keywords);
+    if (keyword) return { emoji: rule.emoji, delta: rule.delta, keyword, category: rule.category };
   }
   return null;
 }
@@ -1084,10 +1151,10 @@ function CustomTagForm({ onAdd }) {
           className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
         />
       </div>
-      <div className="h-7 mt-1.5 flex items-center">
+      <div className="min-h-7 mt-1.5 flex items-center">
         {autoApplied ? (
-          <p key={detected.keyword} className="tds-fade-up text-[12px] text-[#3182F6] font-medium">
-            '{detected.keyword}' 감지 → {detected.emoji} {fmtPct(detected.delta)} 양형 기준 자동 적용
+          <p key={detected.keyword} className="tds-fade-up text-[12px] leading-snug text-[#3182F6] font-medium break-keep">
+            💡 '{detected.keyword}' 감지 → {detected.emoji} {fmtPct(detected.delta)} ({detected.category}) 양형 기준 자동 적용
           </p>
         ) : touched ? (
           <p className="text-[12px] text-[#8B95A1]">재판부 직권으로 형량을 직접 조정 중이에요</p>
