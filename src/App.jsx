@@ -24,6 +24,7 @@ import {
 
 const BASE_WEIGHT = 100;
 const MIN_WEIGHT = 10;
+const MAX_WEIGHT = 300;
 const MIN_PEOPLE = 2;
 const MAX_PEOPLE = 10;
 const MIN_AMOUNT = 100;
@@ -31,16 +32,44 @@ const MAX_AMOUNT = 100_000_000;
 const MAX_NAME_LENGTH = 8;
 const CUSTOM_MIN = -30;
 const CUSTOM_MAX = 50;
-const LOADING_DURATION = 2500;
-const LOADING_INTERVAL = 600;
+const CUSTOM_DEFAULT_DELTA = 20;
+
+// 양형 기준 퀵 버튼
+const SENTENCING_PRESETS = [
+  { emoji: '😇', label: '특별감면', delta: -25 },
+  { emoji: '👏', label: '미담', delta: -15 },
+  { emoji: '😒', label: '얄미움', delta: 15 },
+  { emoji: '😡', label: '악질', delta: 30 },
+  { emoji: '💀', label: '대역죄', delta: 50 },
+];
+
+// 커스텀 죄목 키워드 → 이모지/가산율 자동 추천 (위에서부터 먼저 걸리는 규칙 적용)
+const CUSTOM_KEYWORD_RULES = [
+  { keywords: ['지각', '늦'], emoji: '⏰', delta: 15 },
+  { keywords: ['화장실', '도망', '런', '먹튀'], emoji: '🚽', delta: 30 },
+  { keywords: ['토', '오바이트', '만취', '진상'], emoji: '🤮', delta: 40 },
+  { keywords: ['안주', '고기', '혼자', '다 먹'], emoji: '🍖', delta: 20 },
+  { keywords: ['전여친', '전남친', '전애인', '울', '눈물'], emoji: '😭', delta: 35 },
+  { keywords: ['담배'], emoji: '🚬', delta: 15 },
+  { keywords: ['솔로', '모솔'], emoji: '💔', delta: -10 },
+  { keywords: ['생일', '합격', '승진', '퇴사'], emoji: '🎉', delta: -25 },
+  { keywords: ['예약', '웨이팅', '운전', '대리', '택시'], emoji: '🚗', delta: -20 },
+  { keywords: ['사줌', '쐈', '커피', '2차'], emoji: '☕', delta: -25 },
+];
+const LOADING_DURATION = 3000;
+const LOADING_INTERVAL = 750;
+const LOADING_TAG_SLOTS = 3;
 
 const DEFAULT_PEOPLE = ['김총무', '박빌런', '이얌체'];
 
-const LOADING_MESSAGES = [
-  '불판 열역학 데이터 및 젓가락 이동 궤적 분석 중...',
-  '전 애인 언급으로 인한 모임 분위기 감가상각 계산 중...',
-  '소수점 셋째 자리까지 우정 파괴 지수 산출 완료!',
+const FALLBACK_LOADING_POOL = [
+  '테이블 위 빈 소주병·맥주병 개수와 영수증 내역 대조 중...',
+  '누가 안주발 세웠는지 젓가락 동선 역추적 중...',
+  '전원 무죄 주장에 따라 10원 단위 자투리 독박자 추첨 중...',
+  '단순 1/N이라는 공산주의식 정산 방식 폐기 처분 중...',
 ];
+
+const LOADING_FINALE = '1원 단위 오차 없는 우정 파괴 청구서 발급 완료!';
 
 const TAG_CATEGORIES = [
   {
@@ -51,26 +80,92 @@ const TAG_CATEGORIES = [
       {
         id: 'no-grill',
         emoji: '🥩',
-        label: '고기 한 점도 안 굽고 쌈만 싸 먹음',
+        label: '집게 한 번 안 잡고 다 구워진 고기만 골라 먹음',
         delta: 25,
-        reason: '집게 알레르기 및 불판 노동 기피세',
-        verdict: '집게는 무기가 아닙니다. 그러나 귀하는 끝내 그것을 들지 않았습니다.',
+        reason: '불판 앞 무임승차 및 날름충 가산세',
+        verdict: '고기가 익자마자 젓가락이 마하 속도로 움직이더군요. 집게 드는 법은 까먹으셨나요?',
+        loadingTemplates: [
+          '{name}님이 다 익은 고기만 골라 집어간 횟수 대조 중...',
+          '{name}님이 고기 뒤집는 척만 하고 쌈 싸 먹은 정황 포착 중...',
+        ],
       },
       {
-        id: 'fries',
-        emoji: '🍟',
-        label: '안주 안 먹는다더니 감자튀김/기본안주 싹쓸이',
+        id: 'side-dish',
+        emoji: '🌽',
+        label: '"배불러서 안 먹어" 해놓고 기본안주(강냉이·콘옥수수·계란찜) 혼자 동냄',
         delta: 15,
-        reason: '무임승차 탄수화물 횡령죄',
-        verdict: '"난 배불러서 안 먹을게"는 오늘부로 법적 효력을 상실했습니다.',
+        reason: '입터짐 위증죄 및 기본안주 독점세',
+        verdict: '분명 입맛 없다면서요. 이모님이 기본안주 리필하러 오시다가 팔 빠지실 뻔했습니다.',
+        loadingTemplates: [
+          '{name}님이 배부르다면서 리필시킨 계란찜과 콘옥수수 단가 산출 중...',
+          '{name}님이 무의식중에 집어 먹은 마카로니 과자 그램(g) 수 계량 중...',
+        ],
       },
       {
-        id: 'no-drink',
-        emoji: '🍺',
-        label: '첫 잔 이후로 술 안 마시고 안주만 공략',
+        id: 'stew',
+        emoji: '🍲',
+        label: '찌개·전골에서 고기랑 핵심 건더기만 쏙쏙 건져 먹음',
         delta: 20,
-        reason: '안주 가성비 생태계 교란세',
-        verdict: '술값은 나눴지만 안주는 독점하셨군요. 시장경제가 울고 있습니다.',
+        reason: '국물 생태계 파괴 및 건더기 싹쓸이세',
+        verdict: '남들은 김치찌개 국물만 마실 때 혼자 제육볶음을 드셨더군요.',
+        loadingTemplates: [
+          '{name}님의 국자 동선을 추적해 건져 간 찌개 고기 비율 계산 중...',
+          '{name}님이 남긴 두부 조각과 파 건더기 잔해 분석 중...',
+        ],
+      },
+      {
+        id: 'sober-eater',
+        emoji: '🥤',
+        label: '술 안 마신다더니 제일 비싼 안주만 골라서 전투적으로 흡입',
+        delta: 20,
+        reason: '안주 가성비 교란 및 맨정신 포식세',
+        verdict: '술값 빼달라고 하기 전에 본인이 뱃속에 넣은 안주 단가부터 생각해 보시기 바랍니다.',
+        loadingTemplates: [
+          '{name}님이 콜라 한 캔 마시면서 해치운 메인 안주 접시 수 합산 중...',
+          '{name}님의 맨정신 젓가락질 속도와 테이블 안주 소멸 속도 비교 중...',
+        ],
+      },
+      {
+        id: 'fake-drink',
+        emoji: '🍻',
+        label: '소주 첫 잔만 마시고 슬쩍 물 타거나 꺾어 마시기 시전',
+        delta: 12,
+        reason: '알코올 농도 조작 및 밑장빼기 가산세',
+        verdict: '잔은 다 같이 부딪혔는데 왜 본인 잔만 끝까지 수위가 그대로인지 해명 바랍니다.',
+        loadingTemplates: ['{name}님의 소주잔 잔류량 및 몰래 물 탄 비율 역산 중...'],
+      },
+      {
+        id: 'one-bite',
+        emoji: '🍨',
+        label: '"한 입만" 해놓고 냉면·볶음밥·샤베트 반 이상 축냄',
+        delta: 15,
+        reason: '사이드 메뉴 강탈 및 한입만 사기죄',
+        verdict: '본인의 "한 입"은 왜 국자 기준인지 과학적 해명이 필요합니다.',
+        loadingTemplates: [
+          '{name}님이 "맛만 본다"며 퍼간 볶음밥과 후식 냉면 부피 측정 중...',
+        ],
+      },
+      {
+        id: 'pricey-drink',
+        emoji: '🍾',
+        label: '아무도 안 마시는데 혼자 하이볼·비싼 술 시켜서 단가 올림',
+        delta: 25,
+        reason: '주류 단가 인플레이션 유발 가산세',
+        verdict: '남들 소주 마실 때 혼자 시켜 드신 고급 주류, 정산서도 고급스럽게 모시겠습니다.',
+        loadingTemplates: [
+          '{name}님이 단독 주문한 고단가 주류의 영수증 지분율 분리 계산 중...',
+        ],
+      },
+      {
+        id: 'burn-meat',
+        emoji: '🥩',
+        label: '안 익은 고기 뒤집어 흐름 끊거나 불판 새까맣게 태움',
+        delta: 15,
+        reason: '육즙 손실 유발 및 불판 방화범 가산세',
+        verdict: '가만히 계시는 게 도와주는 겁니다. 오늘 태워 먹은 고기들에게 사과하세요.',
+        loadingTemplates: [
+          '{name}님이 태워 먹은 삼겹살 부위별 시가 환산 중...',
+        ],
       },
     ],
   },
@@ -82,26 +177,88 @@ const TAG_CATEGORIES = [
       {
         id: 'late',
         emoji: '⏰',
-        label: '약속 시간 지각',
-        delta: 12,
-        reason: '타인의 생명 시간 가치 훼손',
-        verdict: '귀하가 늦은 동안 고기는 탔고, 우정도 함께 탔습니다.',
+        label: '"다 와가!" 해놓고 약속 시간 한참 지나서 등장',
+        delta: 15,
+        reason: '상습 코리안타임 및 거짓 위치보고 가산세',
+        verdict: '본인이 말한 "다 와간다"의 기준이 집 현관문 앞이었다는 사실이 밝혀졌습니다.',
+        loadingTemplates: [
+          '{name}님이 "지하철역 앞이야"라고 말한 시점의 실제 GPS 거리 계산 중...',
+          '{name}님 기다리느라 남들이 먼저 시켜 먹은 빈속 대기 수당 반영 중...',
+        ],
       },
       {
         id: 'rant',
         emoji: '😭',
-        label: '전 애인/회사 하소연 30분 이상 시전',
+        label: '술 취해서 전 애인 얘기·회사 욕 30분 이상 무한 반복',
         delta: 35,
-        reason: '감정노동 유발 및 테이블 분위기 곱창세',
-        verdict: '전 애인은 떠났지만, 그 이야기는 30분간 우리 곁에 머물렀습니다.',
+        reason: '테이블 감정 쓰레기통화 및 귀에서 피남 배상금',
+        verdict: '그 이야기 작년부터 오늘까지 도합 14번째 들었습니다. 이제 방청객 알바비 내세요.',
+        loadingTemplates: [
+          '{name}님의 전 애인 언급 횟수 및 주변 친구들 영혼 가출 시간 합산 중...',
+          '{name}님의 했던 얘기 또 하기 도돌이표 구간 시급 환산 중...',
+        ],
       },
       {
         id: 'phone',
         emoji: '📱',
-        label: '술자리 내내 인스타/카톡만 봄',
+        label: '모임 내내 핸드폰만 보며 카톡·인스타 하느라 대답 안 함',
         delta: 15,
-        reason: '사이버 망명 및 오프라인 직무유기',
-        verdict: '몸은 고깃집에, 영혼은 인스타 피드에 계셨던 것으로 확인됩니다.',
+        reason: '술자리 영혼 불참 및 데이터 로밍세',
+        verdict: '그렇게 핸드폰만 볼 거면 다음부턴 단톡방 보이스톡으로만 참석하시기 바랍니다.',
+        loadingTemplates: ['{name}님이 술자리에서 고개 숙이고 액정만 쳐다본 시간 초 단위 측정 중...'],
+      },
+      {
+        id: 'bill-dodge',
+        emoji: '🚽',
+        label: '분위기 무르익거나 계산할 타이밍에 귀신같이 화장실·막차 런',
+        delta: 30,
+        reason: '포스기 회피 기동 및 얌체 귀가 가산세',
+        verdict: '계산서 빌지가 테이블에 올라오는 순간 방광이 반응하는 과학적 신비를 목격했습니다.',
+        loadingTemplates: ['{name}님이 영수증 나오는 소리에 맞춰 화장실로 이동한 타이밍 검증 중...'],
+      },
+      {
+        id: 'drunk-call',
+        emoji: '📞',
+        label: '술 취해서 새벽에 전 애인·잠든 친구한테 전화 걸기 시전',
+        delta: 30,
+        reason: '새벽 발신 폭주 및 흑역사 생성 방지세',
+        verdict: '내일 아침 이불킥할 본인을 대신해 주변 친구들이 겪은 항마력 소모 비용을 청구합니다.',
+        loadingTemplates: [
+          '{name}님의 최근 통화목록 발신 시도를 말리느라 소모된 친구들 칼로리 계산 중...',
+        ],
+      },
+      {
+        id: 'war-story',
+        emoji: '🪖',
+        label: '안 물어본 왕년 허세·군대 무용담·훈계 무한 라디오',
+        delta: 25,
+        reason: '고장 난 라디오 청취료 및 거짓말 탐지세',
+        verdict: '왕년에 그렇게 잘나가셨으니 오늘 정산 금액도 호기롭게 더 내실 줄 믿습니다.',
+        loadingTemplates: [
+          '{name}님의 무용담 과장 비율 및 테이블 하품 횟수 카운트 중...',
+        ],
+      },
+      {
+        id: 'round2-sleep',
+        emoji: '🎤',
+        label: '2차·노래방 가자고 제일 크게 선동해놓고 구석에서 꿀잠',
+        delta: 25,
+        reason: '2차 강제 징집 후 본부 이탈 가산세',
+        verdict: '집에 가자는 사람 붙잡아 놓고 본인이 주무시면 이건 숙박비로 청구해야 맞습니다.',
+        loadingTemplates: [
+          '{name}님이 술집 의자를 침대 삼아 취침한 분당 숙박료 산정 중...',
+        ],
+      },
+      {
+        id: 'ghost-exit',
+        emoji: '💨',
+        label: '인사도 없이 슬그머니 짐 챙겨서 유령처럼 사라짐',
+        delta: 20,
+        reason: '무단 증발 및 실종 신고 걱정 유발세',
+        verdict: '화장실 간 줄 알았는데 집 이불 속이셨군요. 닌자 전직 축하금으로 가산세 부과합니다.',
+        loadingTemplates: [
+          '{name}님이 흔적도 없이 사라진 정확한 시점의 CCTV 동선 역추적 중...',
+        ],
       },
     ],
   },
@@ -113,30 +270,85 @@ const TAG_CATEGORIES = [
       {
         id: 'grill-master',
         emoji: '🔥',
-        label: '고기 전담 마크 및 볶음밥 집도',
+        label: '연기 다 마시며 고기 굽기·자르기·볶음밥까지 풀코스 집도',
         delta: -25,
-        reason: '불판 앞 고온 화상 위험 수당 공제',
+        reason: '불판 앞 고기 장인 수고비 및 옷 냄새 배상 공제',
+        loadingTemplates: [
+          '{name}님의 패딩과 니트에 밴 삼겹살 연기 탈취 비용 공제 중...',
+          '{name}님이 한 점도 안 태우고 구워낸 집게질 노동 가치 산정 중...',
+        ],
       },
       {
         id: 'far-home',
         emoji: '🏠',
-        label: '오늘 집이 제일 멂',
+        label: '오늘 집이 제일 멀어서 막차 끊길 위기 감수',
         delta: -12,
-        reason: '장거리 귀가 여정 교통 복지 공제',
+        reason: '장거리 원정 참석 및 귀가길 고행 위로금',
+        loadingTemplates: ['{name}님의 험난한 귀가 환승 횟수와 거리 비례 교통 복지비 감액 중...'],
       },
       {
         id: 'treasurer',
         emoji: '💳',
-        label: '내 카드로 일단 긁음/총무 담당',
+        label: '복잡한 계산 일단 내 카드로 긁고 쪼잔정산 총무 담당',
         delta: -10,
-        reason: '선결제 유동성 공급 및 정산 행정 수고비',
+        reason: '선결제 총대 메기 및 정산 수금 스트레스 수당',
+        loadingTemplates: ['{name}님의 카드값 선결제 희생 및 미입금자 추심 수고비 반영 중...'],
       },
       {
-        id: 'clown',
-        emoji: '🤡',
-        label: '오늘 썰 풀어서 전원 웃겨줌',
+        id: 'mc',
+        emoji: '🤣',
+        label: '오늘 역대급 썰 풀어서 술자리 오디오 꽉 채우고 전원 웃겨줌',
         delta: -15,
-        reason: '테이블 엔터테인먼트 광대 수당',
+        reason: '테이블 메인 MC 출연료 및 광대 보너스 공제',
+        loadingTemplates: ['{name}님이 살려낸 술자리 텐션과 웃음 데시벨 기여도 할인 적용 중...'],
+      },
+      {
+        id: 'angel',
+        emoji: '🍺',
+        label: '취한 친구 물 챙겨주고 숙취해소제 사 온 엔젤',
+        delta: -15,
+        reason: '술자리 구호 활동 및 간 보호 복지 공제',
+        loadingTemplates: ['{name}님이 챙겨준 물컵과 숙취해소제 구호 활동 내역 감액 반영 중...'],
+      },
+      {
+        id: 'taxi-escort',
+        emoji: '🚕',
+        label: '만취한 친구 택시 태워 보내고 기사님께 행선지 브리핑 완료',
+        delta: -20,
+        reason: '주취자 안전 귀가 호송 및 보호자 수당',
+        loadingTemplates: [
+          '{name}님이 만취자 택시 문 닫아주며 기사님께 고개 숙인 횟수 공제 중...',
+        ],
+      },
+      {
+        id: 'reservation',
+        emoji: '📅',
+        label: '핫플 식당 예약·웨이팅 줄 서기 총대 메고 명당 확보',
+        delta: -15,
+        reason: '사전 예약 행정력 및 웨이팅 다리 값 공제',
+        loadingTemplates: [
+          '{name}님이 식당 예약과 웨이팅으로 아껴준 모임 시간 가치 환산 중...',
+        ],
+      },
+      {
+        id: 'late-joiner',
+        emoji: '⏱️',
+        label: '야근·선약 때문에 마지막에 잠깐 합류했는데도 의리로 참석',
+        delta: -25,
+        reason: '후발대 의리 참석 참작 및 체류시간 비례 감면',
+        loadingTemplates: [
+          '{name}님의 실제 착석 시간 대비 억울함 지수 대폭 감액 중...',
+        ],
+      },
+      {
+        id: 'celebrant',
+        emoji: '🎂',
+        label: '오늘 생일 / 승진·합격·이직 등 축하 주인공 우대',
+        delta: -30,
+        reason: '오늘의 주인공 특별 우대 복지 할인',
+        loadingTemplates: [
+          '{name}님의 경사스러운 날을 맞아 주인공 특별 우대 할인율 적용 중...',
+        ],
       },
     ],
   },
@@ -145,7 +357,7 @@ const TAG_CATEGORIES = [
 const PRESET_TAGS = TAG_CATEGORIES.flatMap((c) => c.tags);
 
 const NO_VILLAIN_VERDICT =
-  '오늘 모임은 놀라울 만큼 평화로웠습니다. 다만 자투리는 누군가 내야 하므로 법정은 냉정하게 한 명을 지목합니다.';
+  '오늘 모임은 웬일로 아무도 진상을 안 부렸습니다. 하지만 10원 단위 자투리는 누군가 내야 하므로 제일 만만한 사람을 지목합니다.';
 
 /* ──────────────────────────────────────────────────────────────
  * 유틸
@@ -181,12 +393,86 @@ const toKoreanUnit = (n) => {
   return `${parts.join(' ')}원`;
 };
 
-const customVerdict = (label) =>
-  `"${label}" 혐의는 현장 배심원 만장일치로 유죄가 인정되었습니다. 항소는 다음 모임 1차 계산으로만 가능합니다.`;
+const customVerdict = (label, delta) => {
+  if (delta >= 35) {
+    return `"${label}" 건은 우정 파탄급 중대 범죄로 인정되어 가석방 없는 최고형 가산세가 선고되었습니다.`;
+  }
+  if (delta >= 20) {
+    return `"${label}" 혐의는 술자리 동석자 만장일치로 유죄가 확정되었습니다. 불복 시 다음 모임 1차 쏘기로 항소할 수 있습니다.`;
+  }
+  return `"${label}" 건은 얄미움 지수가 상당하여 소액의 괘씸죄 가산세가 부과되었습니다.`;
+};
+
+const customLoadingMessage = (name, tag) => {
+  if (tag.delta >= 35) return `${name}님의 '${tag.label}' 중대 사건 특별수사본부 증거물 압수 중...`;
+  if (tag.delta >= 20) return `${name}님의 '${tag.label}' 만행 현장 목격자 진술 확보 중...`;
+  if (tag.delta > 0) return `${name}님의 '${tag.label}' 괘씸죄 얄미움 지수 정밀 측정 중...`;
+  return `${name}님의 '${tag.label}' 미담 사례 진위 여부 확인 중...`;
+};
+
+function detectCustomPreset(label) {
+  const text = label.trim();
+  if (!text) return null;
+  for (const rule of CUSTOM_KEYWORD_RULES) {
+    const keyword = rule.keywords.find((k) => text.includes(k));
+    if (keyword) return { emoji: rule.emoji, delta: rule.delta, keyword };
+  }
+  return null;
+}
+
+const defaultCustomEmoji = (delta) => (delta > 0 ? '⚖️' : '😇');
+
+// 감지된 이모지는 가산/공제 방향이 일치할 때만 사용
+const resolveCustomEmoji = (label, delta) => {
+  const preset = detectCustomPreset(label);
+  return preset && Math.sign(preset.delta) === Math.sign(delta) ? preset.emoji : defaultCustomEmoji(delta);
+};
+
+const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+const shuffle = (arr) => {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+};
+
+/**
+ * 로딩 문구 생성기
+ * - 선택된 태그마다 참가자 이름을 넣은 감사 문구를 만들고, 가중치 절대값이 큰 순(동률은 랜덤)으로 3개 추출
+ * - 모자라면 공통 감사 문구 풀에서 겹치지 않게 채우고, 마지막은 항상 피날레 문구
+ */
+function buildLoadingMessages(people, selections, tagMap) {
+  const candidates = [];
+  people.forEach((p) => {
+    (selections[p.id] || []).forEach((tagId) => {
+      const tag = tagMap[tagId];
+      if (!tag) return;
+      let text;
+      if (tag.custom) {
+        text = customLoadingMessage(p.name, tag);
+      } else if (tag.loadingTemplates?.length) {
+        text = pickRandom(tag.loadingTemplates).replaceAll('{name}', p.name);
+      }
+      if (text) candidates.push({ text, weight: Math.abs(tag.delta) });
+    });
+  });
+
+  const picked = shuffle(candidates)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, LOADING_TAG_SLOTS)
+    .map((c) => c.text);
+  const fallback = shuffle(FALLBACK_LOADING_POOL);
+  while (picked.length < LOADING_TAG_SLOTS && fallback.length) picked.push(fallback.shift());
+
+  return [...picked, LOADING_FINALE];
+}
 
 /**
  * 제로섬 정산 엔진
- * - W_i = max(10, 100 + Σ delta)
+ * - W_i = min(300, max(10, 100 + Σ delta))
  * - Exact_i = 총액 × W_i / ΣW  (화면 표시용 소수점 2자리)
  * - 송금액 = 10원 단위 내림 → 자투리 전액을 1등 빌런에게 독박
  * 정수 연산으로 내림을 계산해 부동소수점 오차 없이 합계 = 총액을 보장한다.
@@ -198,7 +484,7 @@ function computeSettlement(total, people, selections, tagMap) {
     const tags = (selections[p.id] || []).map((id) => tagMap[id]).filter(Boolean);
     const deltaSum = tags.reduce((s, t) => s + t.delta, 0);
     const rawWeight = BASE_WEIGHT + deltaSum;
-    const weight = Math.max(MIN_WEIGHT, rawWeight);
+    const weight = Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, rawWeight));
     return {
       ...p,
       idx,
@@ -206,6 +492,7 @@ function computeSettlement(total, people, selections, tagMap) {
       deltaSum,
       weight,
       clamped: rawWeight < MIN_WEIGHT,
+      clampedMax: rawWeight > MAX_WEIGHT,
       penaltyCount: tags.filter((t) => t.delta > 0).length,
     };
   });
@@ -242,7 +529,7 @@ function computeSettlement(total, people, selections, tagMap) {
   const verdict = !hasVillain
     ? NO_VILLAIN_VERDICT
     : worstTag
-      ? worstTag.verdict || customVerdict(worstTag.label)
+      ? worstTag.verdict || customVerdict(worstTag.label, worstTag.delta)
       : NO_VILLAIN_VERDICT;
 
   const sorted = [...rows].sort((a, b) => b.weight - a.weight || a.idx - b.idx);
@@ -299,7 +586,7 @@ function buildShareText({ total, settlement, account, memo }) {
   if (account.trim()) out.push(`🏦 입금처: ${account.trim()}`);
   if (memo.trim()) out.push(`💬 총무의 한마디: ${memo.trim()}`);
   out.push('');
-  out.push('※ 본 정산은 AI 대법관의 확정 판결로 항소가 불가합니다.');
+  out.push('※ 본 정산은 최종 확정 판결로 항소가 불가하며, 읽씹 시 가산세가 추가됩니다.');
   out.push('※ 이의 제기 시 다음 모임 가산세 +50%가 자동 부과됩니다.');
   return out.join('\n');
 }
@@ -475,7 +762,7 @@ function Toast({ toast }) {
 }
 
 function Header({ step, onBack }) {
-  const titles = ['', '정산 정보 입력', '인간적 기여도 평가', 'AI 대법관 심리 중', '최종 판결문'];
+  const titles = ['', '정산 정보 입력', '인간적 기여도 평가', '영수증 정밀 감사 중', '최종 판결문'];
   return (
     <header className="sticky top-0 z-20 bg-[#F2F4F6]/90 backdrop-blur">
       <div className="h-14 px-2 flex items-center">
@@ -643,7 +930,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
               type="text"
               value={name}
               maxLength={MAX_NAME_LENGTH}
-              placeholder="이름을 입력하세요 (예: 최노쇼)"
+              placeholder="이름 입력 (예: 김먹튀, 박지각)"
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) submitName();
@@ -660,7 +947,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
           </div>
         ) : (
           <p className="mt-2 text-[13px] text-[#8B95A1] text-center py-2">
-            10명이 넘으면 AI 대법관도 누가 누군지 헷갈려요
+            10명이 넘으면 총무도 누가 누군지 기억 못 해요
           </p>
         )}
       </Card>
@@ -735,13 +1022,34 @@ function TagRow({ tag, checked, onToggle, onDelete }) {
 
 function CustomTagForm({ onAdd }) {
   const [label, setLabel] = useState('');
-  const [delta, setDelta] = useState(20);
+  const [delta, setDelta] = useState(CUSTOM_DEFAULT_DELTA);
+  const [touched, setTouched] = useState(false);
   const [shake, setShake] = useState(false);
+
+  const detected = useMemo(() => detectCustomPreset(label), [label]);
+  const autoApplied = !touched && detected;
+  const previewEmoji = resolveCustomEmoji(label, delta);
+
+  const handleLabelChange = (e) => {
+    const next = e.target.value;
+    setLabel(next);
+    // 유저가 형량을 직접 건드리기 전까지만 키워드 기반 자동 추천
+    if (!touched) {
+      const preset = detectCustomPreset(next);
+      setDelta(preset ? preset.delta : CUSTOM_DEFAULT_DELTA);
+    }
+  };
+
+  const setManualDelta = (value) => {
+    setTouched(true);
+    setDelta(value);
+  };
 
   const submit = () => {
     if (onAdd(label, delta)) {
       setLabel('');
-      setDelta(20);
+      setDelta(CUSTOM_DEFAULT_DELTA);
+      setTouched(false);
     } else {
       setShake(true);
       setTimeout(() => setShake(false), 400);
@@ -756,18 +1064,39 @@ function CustomTagForm({ onAdd }) {
 
   return (
     <div className={`mt-3 p-4 rounded-xl bg-[#F9FAFB] ${shake ? 'tds-shake' : ''}`}>
-      <input
-        type="text"
-        value={label}
-        maxLength={30}
-        placeholder="죄목 이름 (예: 계산할 때 화장실 감)"
-        onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
-        }}
-        className="w-full h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
-      />
-      <div className="mt-4 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span
+          key={previewEmoji}
+          className="tds-pop w-12 h-12 shrink-0 rounded-xl bg-white border border-[#E5E8EB] flex items-center justify-center text-[22px]"
+          aria-hidden
+        >
+          {previewEmoji}
+        </span>
+        <input
+          type="text"
+          value={label}
+          maxLength={30}
+          placeholder="죄목 직접 입력 (예: 만취해서 옆 테이블에 인사함)"
+          onChange={handleLabelChange}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
+          }}
+          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
+        />
+      </div>
+      <div className="h-7 mt-1.5 flex items-center">
+        {autoApplied ? (
+          <p key={detected.keyword} className="tds-fade-up text-[12px] text-[#3182F6] font-medium">
+            '{detected.keyword}' 감지 → {detected.emoji} {fmtPct(detected.delta)} 양형 기준 자동 적용
+          </p>
+        ) : touched ? (
+          <p className="text-[12px] text-[#8B95A1]">재판부 직권으로 형량을 직접 조정 중이에요</p>
+        ) : (
+          <p className="text-[12px] text-[#B0B8C1]">키워드를 넣으면 양형 기준이 자동 추천돼요</p>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
         <span className="text-[13px] font-medium text-[#4E5968]">가산율</span>
         <span className="text-[18px] font-bold tabular-nums transition-colors" style={{ color }}>
           {fmtPct(delta)}
@@ -776,14 +1105,41 @@ function CustomTagForm({ onAdd }) {
           </span>
         </span>
       </div>
+
+      <div className="mt-3 grid grid-cols-5 gap-1.5">
+        {SENTENCING_PRESETS.map((preset) => {
+          const selected = delta === preset.delta;
+          const isPenalty = preset.delta > 0;
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setManualDelta(preset.delta)}
+              aria-pressed={selected}
+              className={`py-1.5 rounded-xl flex flex-col items-center justify-center border transition-all duration-200 active:scale-95 ${
+                selected
+                  ? isPenalty
+                    ? 'bg-[#FFEEEE] border-[#F04452] text-[#F04452]'
+                    : 'bg-[#E5F8EF] border-[#00C471] text-[#00A661]'
+                  : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F2F4F6]'
+              }`}
+            >
+              <span className="text-[15px] leading-none">{preset.emoji}</span>
+              <span className="mt-1 text-[11px] font-medium leading-none whitespace-nowrap">{preset.label}</span>
+              <span className="mt-0.5 text-[11px] font-bold leading-tight tabular-nums">{fmtPct(preset.delta)}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <input
         type="range"
         min={CUSTOM_MIN}
         max={CUSTOM_MAX}
         step={1}
         value={delta}
-        onChange={(e) => setDelta(Number(e.target.value))}
-        className="tds-range w-full mt-3"
+        onChange={(e) => setManualDelta(Number(e.target.value))}
+        className="tds-range w-full mt-4"
         style={{
           background: `linear-gradient(to right, #E5E8EB ${lo}%, ${color} ${lo}%, ${color} ${hi}%, #E5E8EB ${hi}%)`,
         }}
@@ -916,6 +1272,7 @@ function StepTags({
               기본 100 {activeRow && activeRow.deltaSum !== 0 && (activeRow.deltaSum > 0 ? '+ ' : '- ')}
               {activeRow && activeRow.deltaSum !== 0 && Math.abs(activeRow.deltaSum)}
               {activeRow?.clamped && <span className="text-[#00A661]"> (최소 {MIN_WEIGHT} 방어)</span>}
+              {activeRow?.clampedMax && <span className="text-[#F04452]"> (상한 {MAX_WEIGHT} 적용)</span>}
             </span>
             {activeRow && total > 0 && (
               <span className="text-[#4E5968] font-medium tabular-nums">
@@ -996,7 +1353,7 @@ function StepTags({
 
       <BottomCTA>
         <PrimaryButton icon={Gavel} onClick={onStart}>
-          AI 대법관 정산 시작
+          영수증 정밀 감사 시작
         </PrimaryButton>
       </BottomCTA>
     </div>
@@ -1004,26 +1361,26 @@ function StepTags({
 }
 
 /* ──────────────────────────────────────────────────────────────
- * Step 3: 가짜 AI 로딩
+ * Step 3: 영수증 정밀 감사 로딩
  * ────────────────────────────────────────────────────────────── */
 
-function StepLoading({ onDone }) {
+function StepLoading({ messages, onDone }) {
   const [msgIdx, setMsgIdx] = useState(0);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setMsgIdx((i) => Math.min(i + 1, LOADING_MESSAGES.length - 1));
+      setMsgIdx((i) => Math.min(i + 1, messages.length - 1));
     }, LOADING_INTERVAL);
     const timeout = setTimeout(() => doneRef.current(), LOADING_DURATION);
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, []);
+  }, [messages.length]);
 
-  const isLast = msgIdx === LOADING_MESSAGES.length - 1;
+  const isLast = msgIdx === messages.length - 1;
 
   return (
     <div className="tds-fade-up min-h-[calc(100vh-60px)] px-8 flex flex-col items-center justify-center text-center">
@@ -1035,15 +1392,15 @@ function StepLoading({ onDone }) {
         </div>
       </div>
 
-      <p className="mt-8 text-[13px] font-semibold text-[#3182F6] tracking-wide">AI 대법관 정밀 심리 중</p>
-      <div className="mt-3 h-[60px] flex items-start justify-center">
+      <p className="mt-8 text-[13px] font-semibold text-[#3182F6] tracking-wide">술자리 행적 정밀 대조 중</p>
+      <div className="mt-3 h-[108px] flex items-start justify-center">
         <p
           key={msgIdx}
-          className={`tds-roll text-[19px] font-bold leading-[1.45] break-keep ${
+          className={`tds-roll text-[18px] font-bold leading-[1.45] break-keep ${
             isLast ? 'text-[#3182F6]' : 'text-[#191F28]'
           }`}
         >
-          {LOADING_MESSAGES[msgIdx]}
+          {messages[msgIdx]}
         </p>
       </div>
 
@@ -1051,7 +1408,7 @@ function StepLoading({ onDone }) {
         <div className="tds-progress h-full rounded-full bg-[#3182F6]" />
       </div>
       <div className="mt-6 flex gap-1.5">
-        {LOADING_MESSAGES.map((_, i) => (
+        {messages.map((_, i) => (
           <span
             key={i}
             className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -1060,7 +1417,7 @@ function StepLoading({ onDone }) {
           />
         ))}
       </div>
-      <p className="mt-10 text-[12px] text-[#B0B8C1]">※ 실제 AI는 사용되지 않았으며, 우정은 실제로 파괴됩니다.</p>
+      <p className="mt-10 text-[12px] text-[#B0B8C1]">※ 본 감사는 한 치의 인정도 없이 오직 팩트와 뒤끝으로만 진행됩니다.</p>
     </div>
   );
 }
@@ -1099,7 +1456,9 @@ function ReceiptItem({ row, settlement, delay }) {
             )}
           </div>
           <p className="text-[12px] text-[#8B95A1] tabular-nums">
-            가중치 {row.weight} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(3)}%
+            가중치 {row.weight}
+            {row.clampedMax && <span className="text-[#F04452]"> (상한 적용)</span>}
+            {row.clamped && <span className="text-[#00A661]"> (최소 방어)</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(3)}%
           </p>
         </div>
         <div className="text-right">
@@ -1190,7 +1549,7 @@ function StepResult({ total, settlement, account, setAccount, memo, setMemo, onC
           </span>
           <div>
             <p className="text-[12px] font-semibold text-[#8B95A1]">
-              AI 대법관 한줄 팩폭{settlement.worstTag && hasVillain ? ` · 주요 혐의: ${settlement.worstTag.label}` : ''}
+              총무 감사실 한줄 참교육{settlement.worstTag && hasVillain ? ` · 주요 혐의: ${settlement.worstTag.label}` : ''}
             </p>
             <p className="mt-1 text-[15px] font-medium text-[#191F28] leading-[1.55] break-keep">"{verdict}"</p>
           </div>
@@ -1245,7 +1604,7 @@ function StepResult({ total, settlement, account, setAccount, memo, setMemo, onC
             }`}
           >
             <ShieldCheck size={15} />
-            {balanced ? `총 결제액과 1원도 틀리지 않고 일치 (오차 0원)` : '합계 불일치 — 대법관 재심 필요'}
+            {balanced ? `총 결제액과 1원도 틀리지 않고 일치 (오차 0원)` : '합계 불일치 — 정산 재판부 재심 필요'}
           </div>
           {(account.trim() || memo.trim()) && (
             <div className="tds-fade-up mt-3 rounded-xl bg-[#E8F3FF] p-3.5 space-y-1">
@@ -1256,7 +1615,7 @@ function StepResult({ total, settlement, account, setAccount, memo, setMemo, onC
             </div>
           )}
           <p className="pt-2 text-[11px] text-[#B0B8C1] leading-relaxed">
-            ※ 본 정산은 AI 대법관의 확정 판결로 항소가 불가합니다. 이의 제기 시 다음 모임 가산세 +50%가 자동 부과됩니다.
+            ※ 본 정산은 최종 확정 판결로 항소가 불가하며, 읽씹 시 가산세가 추가됩니다. 이의 제기 시 다음 모임 가산세 +50%가 자동 부과됩니다.
           </p>
         </div>
       </Card>
@@ -1344,6 +1703,7 @@ export default function App() {
   const [memo, setMemo] = useState('');
   const [toast, setToast] = useState(null);
   const [manualCopyText, setManualCopyText] = useState(null);
+  const [loadingMessages, setLoadingMessages] = useState([LOADING_FINALE]);
   const toastTimer = useRef(null);
 
   const tagMap = useMemo(() => {
@@ -1433,7 +1793,7 @@ export default function App() {
     }
     const tag = {
       id: uid('c'),
-      emoji: delta > 0 ? '⚖️' : '😇',
+      emoji: resolveCustomEmoji(label, delta),
       label,
       delta,
       reason: delta > 0 ? `현장 즉석 입법 "${label}" 가산세` : `현장 배심원 특별 감면 "${label}" 공제`,
@@ -1472,6 +1832,7 @@ export default function App() {
       setStep(1);
       return;
     }
+    setLoadingMessages(buildLoadingMessages(people, selections, tagMap));
     setStep(3);
   };
 
@@ -1533,7 +1894,7 @@ export default function App() {
               onStart={startJudging}
             />
           )}
-          {step === 3 && <StepLoading onDone={finishLoading} />}
+          {step === 3 && <StepLoading messages={loadingMessages} onDone={finishLoading} />}
           {step === 4 && settlement && (
             <StepResult
               total={total}
