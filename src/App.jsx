@@ -24,6 +24,7 @@ import {
 
 const BASE_WEIGHT = 100;
 const MIN_WEIGHT = 10;
+const MAX_WEIGHT = 300;
 const MIN_PEOPLE = 2;
 const MAX_PEOPLE = 10;
 const MIN_AMOUNT = 100;
@@ -31,6 +32,30 @@ const MAX_AMOUNT = 100_000_000;
 const MAX_NAME_LENGTH = 8;
 const CUSTOM_MIN = -30;
 const CUSTOM_MAX = 50;
+const CUSTOM_DEFAULT_DELTA = 20;
+
+// 양형 기준 퀵 버튼
+const SENTENCING_PRESETS = [
+  { emoji: '😇', label: '특별감면', delta: -25 },
+  { emoji: '👏', label: '미담', delta: -15 },
+  { emoji: '😒', label: '얄미움', delta: 15 },
+  { emoji: '😡', label: '악질', delta: 30 },
+  { emoji: '💀', label: '대역죄', delta: 50 },
+];
+
+// 커스텀 죄목 키워드 → 이모지/가산율 자동 추천 (위에서부터 먼저 걸리는 규칙 적용)
+const CUSTOM_KEYWORD_RULES = [
+  { keywords: ['지각', '늦'], emoji: '⏰', delta: 15 },
+  { keywords: ['화장실', '도망', '런', '먹튀'], emoji: '🚽', delta: 30 },
+  { keywords: ['토', '오바이트', '만취', '진상'], emoji: '🤮', delta: 40 },
+  { keywords: ['안주', '고기', '혼자', '다 먹'], emoji: '🍖', delta: 20 },
+  { keywords: ['전여친', '전남친', '전애인', '울', '눈물'], emoji: '😭', delta: 35 },
+  { keywords: ['담배'], emoji: '🚬', delta: 15 },
+  { keywords: ['솔로', '모솔'], emoji: '💔', delta: -10 },
+  { keywords: ['생일', '합격', '승진', '퇴사'], emoji: '🎉', delta: -25 },
+  { keywords: ['예약', '웨이팅', '운전', '대리', '택시'], emoji: '🚗', delta: -20 },
+  { keywords: ['사줌', '쐈', '커피', '2차'], emoji: '☕', delta: -25 },
+];
 const LOADING_DURATION = 3000;
 const LOADING_INTERVAL = 750;
 const LOADING_TAG_SLOTS = 3;
@@ -109,6 +134,39 @@ const TAG_CATEGORIES = [
         verdict: '잔은 다 같이 부딪혔는데 왜 본인 잔만 끝까지 수위가 그대로인지 해명 바랍니다.',
         loadingTemplates: ['{name}님의 소주잔 잔류량 및 몰래 물 탄 비율 역산 중...'],
       },
+      {
+        id: 'one-bite',
+        emoji: '🍨',
+        label: '"한 입만" 해놓고 냉면·볶음밥·샤베트 반 이상 축냄',
+        delta: 15,
+        reason: '사이드 메뉴 강탈 및 한입만 사기죄',
+        verdict: '본인의 "한 입"은 왜 국자 기준인지 과학적 해명이 필요합니다.',
+        loadingTemplates: [
+          '{name}님이 "맛만 본다"며 퍼간 볶음밥과 후식 냉면 부피 측정 중...',
+        ],
+      },
+      {
+        id: 'pricey-drink',
+        emoji: '🍾',
+        label: '아무도 안 마시는데 혼자 하이볼·비싼 술 시켜서 단가 올림',
+        delta: 25,
+        reason: '주류 단가 인플레이션 유발 가산세',
+        verdict: '남들 소주 마실 때 혼자 시켜 드신 고급 주류, 정산서도 고급스럽게 모시겠습니다.',
+        loadingTemplates: [
+          '{name}님이 단독 주문한 고단가 주류의 영수증 지분율 분리 계산 중...',
+        ],
+      },
+      {
+        id: 'burn-meat',
+        emoji: '🥩',
+        label: '안 익은 고기 뒤집어 흐름 끊거나 불판 새까맣게 태움',
+        delta: 15,
+        reason: '육즙 손실 유발 및 불판 방화범 가산세',
+        verdict: '가만히 계시는 게 도와주는 겁니다. 오늘 태워 먹은 고기들에게 사과하세요.',
+        loadingTemplates: [
+          '{name}님이 태워 먹은 삼겹살 부위별 시가 환산 중...',
+        ],
+      },
     ],
   },
   {
@@ -157,6 +215,50 @@ const TAG_CATEGORIES = [
         reason: '포스기 회피 기동 및 얌체 귀가 가산세',
         verdict: '계산서 빌지가 테이블에 올라오는 순간 방광이 반응하는 과학적 신비를 목격했습니다.',
         loadingTemplates: ['{name}님이 영수증 나오는 소리에 맞춰 화장실로 이동한 타이밍 검증 중...'],
+      },
+      {
+        id: 'drunk-call',
+        emoji: '📞',
+        label: '술 취해서 새벽에 전 애인·잠든 친구한테 전화 걸기 시전',
+        delta: 30,
+        reason: '새벽 발신 폭주 및 흑역사 생성 방지세',
+        verdict: '내일 아침 이불킥할 본인을 대신해 주변 친구들이 겪은 항마력 소모 비용을 청구합니다.',
+        loadingTemplates: [
+          '{name}님의 최근 통화목록 발신 시도를 말리느라 소모된 친구들 칼로리 계산 중...',
+        ],
+      },
+      {
+        id: 'war-story',
+        emoji: '🪖',
+        label: '안 물어본 왕년 허세·군대 무용담·훈계 무한 라디오',
+        delta: 25,
+        reason: '고장 난 라디오 청취료 및 거짓말 탐지세',
+        verdict: '왕년에 그렇게 잘나가셨으니 오늘 정산 금액도 호기롭게 더 내실 줄 믿습니다.',
+        loadingTemplates: [
+          '{name}님의 무용담 과장 비율 및 테이블 하품 횟수 카운트 중...',
+        ],
+      },
+      {
+        id: 'round2-sleep',
+        emoji: '🎤',
+        label: '2차·노래방 가자고 제일 크게 선동해놓고 구석에서 꿀잠',
+        delta: 25,
+        reason: '2차 강제 징집 후 본부 이탈 가산세',
+        verdict: '집에 가자는 사람 붙잡아 놓고 본인이 주무시면 이건 숙박비로 청구해야 맞습니다.',
+        loadingTemplates: [
+          '{name}님이 술집 의자를 침대 삼아 취침한 분당 숙박료 산정 중...',
+        ],
+      },
+      {
+        id: 'ghost-exit',
+        emoji: '💨',
+        label: '인사도 없이 슬그머니 짐 챙겨서 유령처럼 사라짐',
+        delta: 20,
+        reason: '무단 증발 및 실종 신고 걱정 유발세',
+        verdict: '화장실 간 줄 알았는데 집 이불 속이셨군요. 닌자 전직 축하금으로 가산세 부과합니다.',
+        loadingTemplates: [
+          '{name}님이 흔적도 없이 사라진 정확한 시점의 CCTV 동선 역추적 중...',
+        ],
       },
     ],
   },
@@ -208,6 +310,46 @@ const TAG_CATEGORIES = [
         reason: '술자리 구호 활동 및 간 보호 복지 공제',
         loadingTemplates: ['{name}님이 챙겨준 물컵과 숙취해소제 구호 활동 내역 감액 반영 중...'],
       },
+      {
+        id: 'taxi-escort',
+        emoji: '🚕',
+        label: '만취한 친구 택시 태워 보내고 기사님께 행선지 브리핑 완료',
+        delta: -20,
+        reason: '주취자 안전 귀가 호송 및 보호자 수당',
+        loadingTemplates: [
+          '{name}님이 만취자 택시 문 닫아주며 기사님께 고개 숙인 횟수 공제 중...',
+        ],
+      },
+      {
+        id: 'reservation',
+        emoji: '📅',
+        label: '핫플 식당 예약·웨이팅 줄 서기 총대 메고 명당 확보',
+        delta: -15,
+        reason: '사전 예약 행정력 및 웨이팅 다리 값 공제',
+        loadingTemplates: [
+          '{name}님이 식당 예약과 웨이팅으로 아껴준 모임 시간 가치 환산 중...',
+        ],
+      },
+      {
+        id: 'late-joiner',
+        emoji: '⏱️',
+        label: '야근·선약 때문에 마지막에 잠깐 합류했는데도 의리로 참석',
+        delta: -25,
+        reason: '후발대 의리 참석 참작 및 체류시간 비례 감면',
+        loadingTemplates: [
+          '{name}님의 실제 착석 시간 대비 억울함 지수 대폭 감액 중...',
+        ],
+      },
+      {
+        id: 'celebrant',
+        emoji: '🎂',
+        label: '오늘 생일 / 승진·합격·이직 등 축하 주인공 우대',
+        delta: -30,
+        reason: '오늘의 주인공 특별 우대 복지 할인',
+        loadingTemplates: [
+          '{name}님의 경사스러운 날을 맞아 주인공 특별 우대 할인율 적용 중...',
+        ],
+      },
     ],
   },
 ];
@@ -251,8 +393,40 @@ const toKoreanUnit = (n) => {
   return `${parts.join(' ')}원`;
 };
 
-const customVerdict = (label) =>
-  `"${label}" 건은 술자리 동석자 전원 만장일치로 유죄가 확정되었습니다. 불복 시 다음 모임 1차 쏘기로 항소할 수 있습니다.`;
+const customVerdict = (label, delta) => {
+  if (delta >= 35) {
+    return `"${label}" 건은 우정 파탄급 중대 범죄로 인정되어 가석방 없는 최고형 가산세가 선고되었습니다.`;
+  }
+  if (delta >= 20) {
+    return `"${label}" 혐의는 술자리 동석자 만장일치로 유죄가 확정되었습니다. 불복 시 다음 모임 1차 쏘기로 항소할 수 있습니다.`;
+  }
+  return `"${label}" 건은 얄미움 지수가 상당하여 소액의 괘씸죄 가산세가 부과되었습니다.`;
+};
+
+const customLoadingMessage = (name, tag) => {
+  if (tag.delta >= 35) return `${name}님의 '${tag.label}' 중대 사건 특별수사본부 증거물 압수 중...`;
+  if (tag.delta >= 20) return `${name}님의 '${tag.label}' 만행 현장 목격자 진술 확보 중...`;
+  if (tag.delta > 0) return `${name}님의 '${tag.label}' 괘씸죄 얄미움 지수 정밀 측정 중...`;
+  return `${name}님의 '${tag.label}' 미담 사례 진위 여부 확인 중...`;
+};
+
+function detectCustomPreset(label) {
+  const text = label.trim();
+  if (!text) return null;
+  for (const rule of CUSTOM_KEYWORD_RULES) {
+    const keyword = rule.keywords.find((k) => text.includes(k));
+    if (keyword) return { emoji: rule.emoji, delta: rule.delta, keyword };
+  }
+  return null;
+}
+
+const defaultCustomEmoji = (delta) => (delta > 0 ? '⚖️' : '😇');
+
+// 감지된 이모지는 가산/공제 방향이 일치할 때만 사용
+const resolveCustomEmoji = (label, delta) => {
+  const preset = detectCustomPreset(label);
+  return preset && Math.sign(preset.delta) === Math.sign(delta) ? preset.emoji : defaultCustomEmoji(delta);
+};
 
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -278,10 +452,7 @@ function buildLoadingMessages(people, selections, tagMap) {
       if (!tag) return;
       let text;
       if (tag.custom) {
-        text =
-          tag.delta > 0
-            ? `${p.name}님의 '${tag.label}' 만행 현장 목격자 진술 확보 중...`
-            : `${p.name}님의 '${tag.label}' 미담 사례 진위 여부 확인 중...`;
+        text = customLoadingMessage(p.name, tag);
       } else if (tag.loadingTemplates?.length) {
         text = pickRandom(tag.loadingTemplates).replaceAll('{name}', p.name);
       }
@@ -301,7 +472,7 @@ function buildLoadingMessages(people, selections, tagMap) {
 
 /**
  * 제로섬 정산 엔진
- * - W_i = max(10, 100 + Σ delta)
+ * - W_i = min(300, max(10, 100 + Σ delta))
  * - Exact_i = 총액 × W_i / ΣW  (화면 표시용 소수점 2자리)
  * - 송금액 = 10원 단위 내림 → 자투리 전액을 1등 빌런에게 독박
  * 정수 연산으로 내림을 계산해 부동소수점 오차 없이 합계 = 총액을 보장한다.
@@ -313,7 +484,7 @@ function computeSettlement(total, people, selections, tagMap) {
     const tags = (selections[p.id] || []).map((id) => tagMap[id]).filter(Boolean);
     const deltaSum = tags.reduce((s, t) => s + t.delta, 0);
     const rawWeight = BASE_WEIGHT + deltaSum;
-    const weight = Math.max(MIN_WEIGHT, rawWeight);
+    const weight = Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, rawWeight));
     return {
       ...p,
       idx,
@@ -321,6 +492,7 @@ function computeSettlement(total, people, selections, tagMap) {
       deltaSum,
       weight,
       clamped: rawWeight < MIN_WEIGHT,
+      clampedMax: rawWeight > MAX_WEIGHT,
       penaltyCount: tags.filter((t) => t.delta > 0).length,
     };
   });
@@ -357,7 +529,7 @@ function computeSettlement(total, people, selections, tagMap) {
   const verdict = !hasVillain
     ? NO_VILLAIN_VERDICT
     : worstTag
-      ? worstTag.verdict || customVerdict(worstTag.label)
+      ? worstTag.verdict || customVerdict(worstTag.label, worstTag.delta)
       : NO_VILLAIN_VERDICT;
 
   const sorted = [...rows].sort((a, b) => b.weight - a.weight || a.idx - b.idx);
@@ -850,13 +1022,34 @@ function TagRow({ tag, checked, onToggle, onDelete }) {
 
 function CustomTagForm({ onAdd }) {
   const [label, setLabel] = useState('');
-  const [delta, setDelta] = useState(20);
+  const [delta, setDelta] = useState(CUSTOM_DEFAULT_DELTA);
+  const [touched, setTouched] = useState(false);
   const [shake, setShake] = useState(false);
+
+  const detected = useMemo(() => detectCustomPreset(label), [label]);
+  const autoApplied = !touched && detected;
+  const previewEmoji = resolveCustomEmoji(label, delta);
+
+  const handleLabelChange = (e) => {
+    const next = e.target.value;
+    setLabel(next);
+    // 유저가 형량을 직접 건드리기 전까지만 키워드 기반 자동 추천
+    if (!touched) {
+      const preset = detectCustomPreset(next);
+      setDelta(preset ? preset.delta : CUSTOM_DEFAULT_DELTA);
+    }
+  };
+
+  const setManualDelta = (value) => {
+    setTouched(true);
+    setDelta(value);
+  };
 
   const submit = () => {
     if (onAdd(label, delta)) {
       setLabel('');
-      setDelta(20);
+      setDelta(CUSTOM_DEFAULT_DELTA);
+      setTouched(false);
     } else {
       setShake(true);
       setTimeout(() => setShake(false), 400);
@@ -871,18 +1064,39 @@ function CustomTagForm({ onAdd }) {
 
   return (
     <div className={`mt-3 p-4 rounded-xl bg-[#F9FAFB] ${shake ? 'tds-shake' : ''}`}>
-      <input
-        type="text"
-        value={label}
-        maxLength={30}
-        placeholder="죄목 직접 입력 (예: 만취해서 옆 테이블에 인사함)"
-        onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
-        }}
-        className="w-full h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
-      />
-      <div className="mt-4 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span
+          key={previewEmoji}
+          className="tds-pop w-12 h-12 shrink-0 rounded-xl bg-white border border-[#E5E8EB] flex items-center justify-center text-[22px]"
+          aria-hidden
+        >
+          {previewEmoji}
+        </span>
+        <input
+          type="text"
+          value={label}
+          maxLength={30}
+          placeholder="죄목 직접 입력 (예: 만취해서 옆 테이블에 인사함)"
+          onChange={handleLabelChange}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
+          }}
+          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
+        />
+      </div>
+      <div className="h-7 mt-1.5 flex items-center">
+        {autoApplied ? (
+          <p key={detected.keyword} className="tds-fade-up text-[12px] text-[#3182F6] font-medium">
+            '{detected.keyword}' 감지 → {detected.emoji} {fmtPct(detected.delta)} 양형 기준 자동 적용
+          </p>
+        ) : touched ? (
+          <p className="text-[12px] text-[#8B95A1]">재판부 직권으로 형량을 직접 조정 중이에요</p>
+        ) : (
+          <p className="text-[12px] text-[#B0B8C1]">키워드를 넣으면 양형 기준이 자동 추천돼요</p>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
         <span className="text-[13px] font-medium text-[#4E5968]">가산율</span>
         <span className="text-[18px] font-bold tabular-nums transition-colors" style={{ color }}>
           {fmtPct(delta)}
@@ -891,14 +1105,41 @@ function CustomTagForm({ onAdd }) {
           </span>
         </span>
       </div>
+
+      <div className="mt-3 grid grid-cols-5 gap-1.5">
+        {SENTENCING_PRESETS.map((preset) => {
+          const selected = delta === preset.delta;
+          const isPenalty = preset.delta > 0;
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setManualDelta(preset.delta)}
+              aria-pressed={selected}
+              className={`py-1.5 rounded-xl flex flex-col items-center justify-center border transition-all duration-200 active:scale-95 ${
+                selected
+                  ? isPenalty
+                    ? 'bg-[#FFEEEE] border-[#F04452] text-[#F04452]'
+                    : 'bg-[#E5F8EF] border-[#00C471] text-[#00A661]'
+                  : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F2F4F6]'
+              }`}
+            >
+              <span className="text-[15px] leading-none">{preset.emoji}</span>
+              <span className="mt-1 text-[11px] font-medium leading-none whitespace-nowrap">{preset.label}</span>
+              <span className="mt-0.5 text-[11px] font-bold leading-tight tabular-nums">{fmtPct(preset.delta)}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <input
         type="range"
         min={CUSTOM_MIN}
         max={CUSTOM_MAX}
         step={1}
         value={delta}
-        onChange={(e) => setDelta(Number(e.target.value))}
-        className="tds-range w-full mt-3"
+        onChange={(e) => setManualDelta(Number(e.target.value))}
+        className="tds-range w-full mt-4"
         style={{
           background: `linear-gradient(to right, #E5E8EB ${lo}%, ${color} ${lo}%, ${color} ${hi}%, #E5E8EB ${hi}%)`,
         }}
@@ -1031,6 +1272,7 @@ function StepTags({
               기본 100 {activeRow && activeRow.deltaSum !== 0 && (activeRow.deltaSum > 0 ? '+ ' : '- ')}
               {activeRow && activeRow.deltaSum !== 0 && Math.abs(activeRow.deltaSum)}
               {activeRow?.clamped && <span className="text-[#00A661]"> (최소 {MIN_WEIGHT} 방어)</span>}
+              {activeRow?.clampedMax && <span className="text-[#F04452]"> (상한 {MAX_WEIGHT} 적용)</span>}
             </span>
             {activeRow && total > 0 && (
               <span className="text-[#4E5968] font-medium tabular-nums">
@@ -1214,7 +1456,9 @@ function ReceiptItem({ row, settlement, delay }) {
             )}
           </div>
           <p className="text-[12px] text-[#8B95A1] tabular-nums">
-            가중치 {row.weight} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(3)}%
+            가중치 {row.weight}
+            {row.clampedMax && <span className="text-[#F04452]"> (상한 적용)</span>}
+            {row.clamped && <span className="text-[#00A661]"> (최소 방어)</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(3)}%
           </p>
         </div>
         <div className="text-right">
@@ -1549,7 +1793,7 @@ export default function App() {
     }
     const tag = {
       id: uid('c'),
-      emoji: delta > 0 ? '⚖️' : '😇',
+      emoji: resolveCustomEmoji(label, delta),
       label,
       delta,
       reason: delta > 0 ? `현장 즉석 입법 "${label}" 가산세` : `현장 배심원 특별 감면 "${label}" 공제`,
