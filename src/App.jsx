@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Crown,
   Gavel,
@@ -115,11 +117,12 @@ const FALLBACK_LOADING_POOL = [
 
 const LOADING_FINALE = '1원 단위 오차 없는 우정 파괴 청구서 발급 완료!';
 
-const TAG_CATEGORIES = [
+// 모임 장소별 전용 태그. 각 장소의 tags는 가산세(+) → 공제(-) 순으로 둔다.
+const PLACE_THEMES = [
   {
-    id: 'labor',
-    title: '먹방/노동 기피',
-    kind: 'penalty',
+    id: 'meat',
+    emoji: '🥩',
+    name: '고깃집',
     tags: [
       {
         id: 'no-grill',
@@ -131,6 +134,169 @@ const TAG_CATEGORIES = [
         loadingTemplates: [
           '{name}님이 다 익은 고기만 골라 집어간 횟수 대조 중...',
           '{name}님이 고기 뒤집는 척만 하고 쌈 싸 먹은 정황 포착 중...',
+        ],
+      },
+      {
+        id: 'burn-meat',
+        emoji: '🥩',
+        label: '안 익은 고기 뒤집어 흐름 끊거나 불판 새까맣게 태움',
+        delta: 15,
+        reason: '육즙 손실 유발 및 불판 방화범 가산세',
+        verdict: '가만히 계시는 게 도와주는 겁니다. 오늘 태워 먹은 고기들에게 사과하세요.',
+        loadingTemplates: [
+          '{name}님이 태워 먹은 삼겹살 부위별 시가 환산 중...',
+        ],
+      },
+      {
+        id: 'one-bite',
+        emoji: '🍨',
+        label: '"한 입만" 해놓고 냉면·볶음밥·된장찌개 반 이상 축냄',
+        delta: 15,
+        reason: '사이드 메뉴 강탈 및 한입만 사기죄',
+        verdict: '본인의 "한 입"은 왜 국자 기준인지 과학적 해명이 필요합니다.',
+        loadingTemplates: [
+          '{name}님이 "맛만 본다"며 퍼간 볶음밥과 후식 냉면 부피 측정 중...',
+        ],
+      },
+      {
+        id: 'garlic-hog',
+        emoji: '🧄',
+        label: '구운 마늘·김치·버섯 등 불판 위 별미만 혼자 싹쓸이',
+        delta: 15,
+        reason: '불판 위 구운 마늘·김치 독점 수확세',
+        verdict: '고기는 거들 뿐, 불판 위 구운 마늘과 김치를 한 톨도 남기지 않고 수확하셨습니다.',
+        loadingTemplates: [
+          '{name}님이 기름장에 건져 간 구운 마늘 개수 세는 중...',
+        ],
+      },
+      {
+        id: 'grill-master',
+        emoji: '🔥',
+        label: '연기 다 마시며 고기 굽기·자르기·볶음밥까지 풀코스 집도',
+        delta: -25,
+        reason: '불판 앞 고기 장인 수고비 및 옷 냄새 배상 공제',
+        loadingTemplates: [
+          '{name}님의 패딩과 니트에 밴 삼겹살 연기 탈취 비용 공제 중...',
+          '{name}님이 한 점도 안 태우고 구워낸 집게질 노동 가치 산정 중...',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'seafood',
+    emoji: '🐟',
+    name: '횟집·해산물',
+    tags: [
+      {
+        id: 'engawa-steal',
+        emoji: '🍣',
+        label: '광어 지느러미(엔가와)·연어 뱃살 등 특수부위만 귀신같이 골라 먹음',
+        delta: 25,
+        reason: '고급 특수부위 독점 및 생선 생태계 교란세',
+        verdict: '접시 위에서 광어 지느러미와 뱃살만 사라지는 마술을 부리셨군요. 어부도 울고 갑니다.',
+        loadingTemplates: [
+          '{name}님의 젓가락이 광어 지느러미(엔가와)로 직행한 확률 계산 중...',
+        ],
+      },
+      {
+        id: 'skidashi-full',
+        emoji: '🌽',
+        label: '회 나오기 전에 스끼다시(콘치즈·초밥·튀김) 혼자 다 먹고 정작 회는 남김',
+        delta: 15,
+        reason: '메인 메뉴 등장 전 위장 조기 마감세',
+        verdict: '콘치즈 리필할 때의 전투력이 정작 메인 회 앞에서는 증발해 버렸습니다.',
+        loadingTemplates: [
+          '{name}님이 회 나오기 전에 해치운 콘치즈와 꽁치구이 지분 산출 중...',
+        ],
+      },
+      {
+        id: 'maeuntang-ramen',
+        emoji: '🍜',
+        label: '매운탕에 라면사리·수제비 넣자고 해놓고 국물만 떠먹고 면은 불게 방치',
+        delta: 15,
+        reason: '탄수화물 무단 유기 및 국물 증발 유발세',
+        verdict: '본인이 넣자고 한 라면사리가 매운탕 국물을 다 흡수해 떡이 되었습니다.',
+        loadingTemplates: [
+          '{name}님이 매운탕 냄비에 방치해 불어버린 라면사리 부피 측정 중...',
+        ],
+      },
+      {
+        id: 'shrimp-peeler',
+        emoji: '🦐',
+        label: '비린내 감수하며 새우·게 껍질 다 까주고 생선 살 발라줌',
+        delta: -20,
+        reason: '갑각류 해체 장인 및 수발 수고비 공제',
+        loadingTemplates: [
+          '{name}님이 손에 비린내 묻히며 까준 새우 마릿수 공제 반영 중...',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'delivery',
+    emoji: '🍗',
+    name: '치킨·족발·배달',
+    tags: [
+      {
+        id: 'drumstick-thief',
+        emoji: '🍗',
+        label: '뼈 치킨 시켰더니 물어보지도 않고 닭다리·날개만 쏙 빼먹음',
+        delta: 25,
+        reason: '닭다리 무단 독점 및 퍽퍽살 떠넘기기 가산세',
+        verdict: '닭 한 마리에 다리는 두 개뿐인데 왜 본인 앞접시에서만 뼈가 두 개 나왔을까요?',
+        loadingTemplates: [
+          '{name}님 앞접시에 쌓인 닭다리·날개 뼈다귀 개수 감식 중...',
+        ],
+      },
+      {
+        id: 'jokbal-lean',
+        emoji: '🍖',
+        label: '족발·보쌈 살코기만 골라 먹고 뼈다귀·비계만 남겨둠',
+        delta: 20,
+        reason: '살코기 편식 및 발골 노동 전가세',
+        verdict: '살코기만 외과 수술하듯 발라 드셨군요. 남은 왕뼈는 누가 뜯으라고 두셨나요?',
+        loadingTemplates: [
+          '{name}님이 족발에서 살코기만 골라 집어간 정밀 타격률 분석 중...',
+        ],
+      },
+      {
+        id: 'side-impulse',
+        emoji: '🧀',
+        label: '치즈볼·막국수·사이드 메뉴 추가하자고 우겨놓고 1입 먹고 남김',
+        delta: 20,
+        reason: '사이드 메뉴 충동 주문 및 잔반 유발세',
+        verdict: '배달 앱 최소주문금액 맞춘다며 시킨 사이드 메뉴, 결국 본인은 한 입만 드셨습니다.',
+        loadingTemplates: [
+          '{name}님이 강력 주장해서 추가된 치즈볼의 잔반 비율 계산 중...',
+        ],
+      },
+      {
+        id: 'home-host',
+        emoji: '🧹',
+        label: '자기 집(자취방) 장소 제공하고 배달 쓰레기·설거지·분리수거 독박',
+        delta: -30,
+        reason: '아지트 대관료 및 배달 음식 뒷정리 환경미화 공제',
+        loadingTemplates: [
+          '{name}님의 자취방 제공 및 치킨 박스·뼈다귀 분리수거 노동 가치 환산 중...',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pocha',
+    emoji: '🍻',
+    name: '포차·술집',
+    tags: [
+      {
+        id: 'stew',
+        emoji: '🍲',
+        label: '찌개·전골에서 고기랑 핵심 건더기만 쏙쏙 건져 먹음',
+        delta: 20,
+        reason: '국물 생태계 파괴 및 건더기 싹쓸이세',
+        verdict: '남들은 김치찌개 국물만 마실 때 혼자 제육볶음을 드셨더군요.',
+        loadingTemplates: [
+          '{name}님의 국자 동선을 추적해 건져 간 찌개 고기 비율 계산 중...',
+          '{name}님이 남긴 두부 조각과 파 건더기 잔해 분석 중...',
         ],
       },
       {
@@ -146,15 +312,14 @@ const TAG_CATEGORIES = [
         ],
       },
       {
-        id: 'stew',
-        emoji: '🍲',
-        label: '찌개·전골에서 고기랑 핵심 건더기만 쏙쏙 건져 먹음',
-        delta: 20,
-        reason: '국물 생태계 파괴 및 건더기 싹쓸이세',
-        verdict: '남들은 김치찌개 국물만 마실 때 혼자 제육볶음을 드셨더군요.',
+        id: 'pricey-drink',
+        emoji: '🍾',
+        label: '아무도 안 마시는데 혼자 하이볼·비싼 술 시켜서 단가 올림',
+        delta: 25,
+        reason: '주류 단가 인플레이션 유발 가산세',
+        verdict: '남들 소주 마실 때 혼자 시켜 드신 고급 주류, 정산서도 고급스럽게 모시겠습니다.',
         loadingTemplates: [
-          '{name}님의 국자 동선을 추적해 건져 간 찌개 고기 비율 계산 중...',
-          '{name}님이 남긴 두부 조각과 파 건더기 잔해 분석 중...',
+          '{name}님이 단독 주문한 고단가 주류의 영수증 지분율 분리 계산 중...',
         ],
       },
       {
@@ -179,40 +344,201 @@ const TAG_CATEGORIES = [
         loadingTemplates: ['{name}님의 소주잔 잔류량 및 몰래 물 탄 비율 역산 중...'],
       },
       {
-        id: 'one-bite',
-        emoji: '🍨',
-        label: '"한 입만" 해놓고 냉면·볶음밥·샤베트 반 이상 축냄',
-        delta: 15,
-        reason: '사이드 메뉴 강탈 및 한입만 사기죄',
-        verdict: '본인의 "한 입"은 왜 국자 기준인지 과학적 해명이 필요합니다.',
-        loadingTemplates: [
-          '{name}님이 "맛만 본다"며 퍼간 볶음밥과 후식 냉면 부피 측정 중...',
-        ],
+        id: 'angel',
+        emoji: '🍺',
+        label: '취한 친구 물 챙겨주고 숙취해소제 사 온 엔젤',
+        delta: -15,
+        reason: '술자리 구호 활동 및 간 보호 복지 공제',
+        loadingTemplates: ['{name}님이 챙겨준 물컵과 숙취해소제 구호 활동 내역 감액 반영 중...'],
       },
+    ],
+  },
+  {
+    id: 'travel',
+    emoji: '🏕️',
+    name: '여행·MT·캠핑',
+    tags: [
       {
-        id: 'pricey-drink',
-        emoji: '🍾',
-        label: '아무도 안 마시는데 혼자 하이볼·비싼 술 시켜서 단가 올림',
+        id: 'mart-cart',
+        emoji: '🛒',
+        label: '마트 장 볼 때 본인만 먹을 비싼 간식·술 슬쩍 카트에 투척',
         delta: 25,
-        reason: '주류 단가 인플레이션 유발 가산세',
-        verdict: '남들 소주 마실 때 혼자 시켜 드신 고급 주류, 정산서도 고급스럽게 모시겠습니다.',
+        reason: '공금 카트 사유화 및 사리사욕 장보기세',
+        verdict: '공금으로 장 보는 카트에 본인 사리사욕이 담긴 고단가 간식이 포착되었습니다.',
         loadingTemplates: [
-          '{name}님이 단독 주문한 고단가 주류의 영수증 지분율 분리 계산 중...',
+          '{name}님이 마트 카트에 몰래 넣은 개인 간식 영수증 내역 적발 중...',
         ],
       },
       {
-        id: 'burn-meat',
-        emoji: '🥩',
-        label: '안 익은 고기 뒤집어 흐름 끊거나 불판 새까맣게 태움',
-        delta: 15,
-        reason: '육즙 손실 유발 및 불판 방화범 가산세',
-        verdict: '가만히 계시는 게 도와주는 겁니다. 오늘 태워 먹은 고기들에게 사과하세요.',
+        id: 'bed-occupation',
+        emoji: '🛏️',
+        label: '숙소 도착하자마자 짐도 안 풀고 제일 좋은 침대·방 먼저 차지',
+        delta: 20,
+        reason: '특실 침대 알박기 및 눕방 프리미엄 가산세',
+        verdict: '숙소 현관문 열리자마자 침대로 다이빙하셨군요. 특실 사용료 추가 청구합니다.',
         loadingTemplates: [
-          '{name}님이 태워 먹은 삼겹살 부위별 시가 환산 중...',
+          '{name}님이 숙소 도착 후 침대에 누워 보낸 시간 점유율 계산 중...',
+        ],
+      },
+      {
+        id: 'camp-lazy',
+        emoji: '⛺',
+        label: '바비큐 불 피우기·요리·설거지할 때만 귀신같이 사라지거나 잠듦',
+        delta: 30,
+        reason: '야외 노동 기피 및 선택적 수면 가산세',
+        verdict: '고기 구울 땐 코 골며 주무시더니 고기 다 구워지니까 눈이 번쩍 뜨이셨네요.',
+        loadingTemplates: [
+          '{name}님이 설거지 타임에 맞춰 화장실로 은신한 시간 대조 중...',
+        ],
+      },
+      {
+        id: 'copilot-sleep',
+        emoji: '😴',
+        label: '운전하는 친구 조수석에 앉아서 출발 5분 만에 코 골며 숙면',
+        delta: 20,
+        reason: '조수석 네비게이터 직무유기 및 꿀잠 숙박료',
+        verdict: '조수석은 침대가 아닙니다. 톨게이트 지나기도 전에 기절하신 죄를 묻습니다.',
+        loadingTemplates: [
+          '{name}님이 조수석에서 코 골며 숙면한 고속도로 구간 거리 측정 중...',
+        ],
+      },
+      {
+        id: 'driver-car',
+        emoji: '🚗',
+        label: '장거리 왕복 운전 + 본인 차량 제공 및 짐 옮기기 총대',
+        delta: -35,
+        reason: '전담 운전기사 수고비 및 차량 감가상각 특별 공제',
+        loadingTemplates: [
+          '{name}님의 왕복 운전 피로도와 타이어 마모도 복지 감액 중...',
+        ],
+      },
+      {
+        id: 'camp-chef',
+        emoji: '🍳',
+        label: '숙소 예약부터 바비큐 집도, 다음날 아침 해장 라면까지 끓여줌',
+        delta: -30,
+        reason: '여행 총괄 가이드 및 메인 셰프 수당 공제',
+        loadingTemplates: [
+          '{name}님이 끓여낸 해장 라면과 바비큐 요리 노동 가치 정산 중...',
         ],
       },
     ],
   },
+  {
+    id: 'activity',
+    emoji: '🎳',
+    name: '노래방·볼링·당구',
+    tags: [
+      {
+        id: 'mic-hog',
+        emoji: '🎤',
+        label: '노래방에서 혼자 마이크 독점하고 자기 노래만 연속 5곡 예약',
+        delta: 25,
+        reason: '단독 콘서트 개최 및 마이크 독점 대관료',
+        verdict: '오늘 모임이 아니라 본인 단독 팬미팅인 줄 알았습니다. 대관료 더 내세요.',
+        loadingTemplates: [
+          '{name}님의 노래방 우선예약 횟수 및 마이크 독점 시간 합산 중...',
+        ],
+      },
+      {
+        id: 'interlude-skip',
+        emoji: '⏭️',
+        label: '남이 노래 부를 때 간주점프·1절만 누르거나 템포 맘대로 조작',
+        delta: 20,
+        reason: '무대 매너 위반 및 흥 깨기 가산세',
+        verdict: '남의 클라이맥스 직전에 취소 버튼을 누른 비정한 손가락에 벌금을 부과합니다.',
+        loadingTemplates: [
+          '{name}님이 남의 노래 도중 몰래 누른 간주점프와 취소 버튼 기록 조회 중...',
+        ],
+      },
+      {
+        id: 'team-troll',
+        emoji: '🎳',
+        label: '볼링·당구·보드게임 팀전에서 혼자 트롤짓해서 팀 패배 원흉 됨',
+        delta: 25,
+        reason: '팀전 패배 원흉 및 X맨 역적 가산세',
+        verdict: '상대 팀에서 심어놓은 스파이가 아니냐는 합리적 의심이 제기되었습니다.',
+        loadingTemplates: [
+          '{name}님의 헛스윙 및 팀 승률 수직하락 기여도 분석 중...',
+        ],
+      },
+      {
+        id: 'mouth-player',
+        emoji: '🗣️',
+        label: '실력은 꼴찌면서 남 치는 내내 옆에서 훈수·입당구·입볼링 시전',
+        delta: 15,
+        reason: '무자격 코칭 및 멘탈 흔들기 가산세',
+        verdict: '입으로는 이미 프로 선수지만 실제 점수판은 처참하군요. 조언 관람료 청구합니다.',
+        loadingTemplates: [
+          '{name}님의 훈수 횟수 대비 실제 본인 점수 괴리율 산출 중...',
+        ],
+      },
+      {
+        id: 'game-carry',
+        emoji: '🏆',
+        label: '압도적 실력으로 팀 캐리하거나 초보 친구 친절하게 강습해 줌',
+        delta: -20,
+        reason: '일타강사 레슨비 및 팀 버스 기사 우대 공제',
+        loadingTemplates: [
+          '{name}님의 멱살 캐리 및 무료 원포인트 레슨 기여도 할인 적용 중...',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'cafe',
+    emoji: '☕',
+    name: '카페·방탈출',
+    tags: [
+      {
+        id: 'luxury-dessert',
+        emoji: '🍰',
+        label: '다들 아메리카노 마시는데 혼자 9천 원짜리 시즌 음료+케이크 독식',
+        delta: 20,
+        reason: '카페 단가 인플레이션 및 당분 독점세',
+        verdict: '밥값보다 비싼 디저트 세트를 혼자 조용히 해치우셨군요.',
+        loadingTemplates: [
+          '{name}님이 주문한 스페셜 음료와 디저트 단가 비율 분리 중...',
+        ],
+      },
+      {
+        id: 'strawberry-thief',
+        emoji: '🍓',
+        label: '케이크 위 딸기·초콜릿 토핑이랑 크림만 쏙 파먹고 빵만 남김',
+        delta: 15,
+        reason: '케이크 핵심 토핑 도굴 및 빵 시트 방치세',
+        verdict: '케이크 위에 올라간 딸기만 쏙 빼먹는 만행, 유치원 이후로 오랜만에 봅니다.',
+        loadingTemplates: [
+          '{name}님 포크에 찍혀 사라진 케이크 위 딸기 행방 추적 중...',
+        ],
+      },
+      {
+        id: 'escape-coward',
+        emoji: '😱',
+        label: '방탈출·보드게임에서 문제 하나도 안 풀고 남의 옷자락만 잡고 다님',
+        delta: 20,
+        reason: '두뇌 노동 무임승차 및 비명 오디오 가산세',
+        verdict: '자물쇠는 하나도 못 풀고 비명만 지르다 나오셨으므로 방탈출 버스비를 청구합니다.',
+        loadingTemplates: [
+          '{name}님이 방탈출 내내 푼 자물쇠 개수(0개) 및 비명 데시벨 측정 중...',
+        ],
+      },
+      {
+        id: 'photo-master',
+        emoji: '📸',
+        label: '친구들 인생샷 건질 때까지 각도 잡으며 사진 100장 찍어줌',
+        delta: -20,
+        reason: '전담 포토그래퍼 열정페이 및 무릎 관절 수당',
+        loadingTemplates: [
+          '{name}님이 친구들 다리 길어 보이게 찍느라 굽힌 무릎 각도 공제 중...',
+        ],
+      },
+    ],
+  },
+];
+
+// 장소와 무관한 공통 태그. 각 카드는 앞의 COMMON_VISIBLE_COUNT개만 기본으로 보여준다.
+const COMMON_CATEGORIES = [
   {
     id: 'mood',
     title: '분위기/시간 훼손',
@@ -312,15 +638,12 @@ const TAG_CATEGORIES = [
     kind: 'deduction',
     tags: [
       {
-        id: 'grill-master',
-        emoji: '🔥',
-        label: '연기 다 마시며 고기 굽기·자르기·볶음밥까지 풀코스 집도',
-        delta: -25,
-        reason: '불판 앞 고기 장인 수고비 및 옷 냄새 배상 공제',
-        loadingTemplates: [
-          '{name}님의 패딩과 니트에 밴 삼겹살 연기 탈취 비용 공제 중...',
-          '{name}님이 한 점도 안 태우고 구워낸 집게질 노동 가치 산정 중...',
-        ],
+        id: 'treasurer',
+        emoji: '💳',
+        label: '복잡한 계산 일단 내 카드로 긁고 쪼잔정산 총무 담당',
+        delta: -10,
+        reason: '선결제 총대 메기 및 정산 수금 스트레스 수당',
+        loadingTemplates: ['{name}님의 카드값 선결제 희생 및 미입금자 추심 수고비 반영 중...'],
       },
       {
         id: 'far-home',
@@ -331,38 +654,12 @@ const TAG_CATEGORIES = [
         loadingTemplates: ['{name}님의 험난한 귀가 환승 횟수와 거리 비례 교통 복지비 감액 중...'],
       },
       {
-        id: 'treasurer',
-        emoji: '💳',
-        label: '복잡한 계산 일단 내 카드로 긁고 쪼잔정산 총무 담당',
-        delta: -10,
-        reason: '선결제 총대 메기 및 정산 수금 스트레스 수당',
-        loadingTemplates: ['{name}님의 카드값 선결제 희생 및 미입금자 추심 수고비 반영 중...'],
-      },
-      {
         id: 'mc',
         emoji: '🤣',
         label: '오늘 역대급 썰 풀어서 술자리 오디오 꽉 채우고 전원 웃겨줌',
         delta: -15,
         reason: '테이블 메인 MC 출연료 및 광대 보너스 공제',
         loadingTemplates: ['{name}님이 살려낸 술자리 텐션과 웃음 데시벨 기여도 할인 적용 중...'],
-      },
-      {
-        id: 'angel',
-        emoji: '🍺',
-        label: '취한 친구 물 챙겨주고 숙취해소제 사 온 엔젤',
-        delta: -15,
-        reason: '술자리 구호 활동 및 간 보호 복지 공제',
-        loadingTemplates: ['{name}님이 챙겨준 물컵과 숙취해소제 구호 활동 내역 감액 반영 중...'],
-      },
-      {
-        id: 'taxi-escort',
-        emoji: '🚕',
-        label: '만취한 친구 택시 태워 보내고 기사님께 행선지 브리핑 완료',
-        delta: -20,
-        reason: '주취자 안전 귀가 호송 및 보호자 수당',
-        loadingTemplates: [
-          '{name}님이 만취자 택시 문 닫아주며 기사님께 고개 숙인 횟수 공제 중...',
-        ],
       },
       {
         id: 'reservation',
@@ -372,6 +669,16 @@ const TAG_CATEGORIES = [
         reason: '사전 예약 행정력 및 웨이팅 다리 값 공제',
         loadingTemplates: [
           '{name}님이 식당 예약과 웨이팅으로 아껴준 모임 시간 가치 환산 중...',
+        ],
+      },
+      {
+        id: 'taxi-escort',
+        emoji: '🚕',
+        label: '만취한 친구 택시 태워 보내고 기사님께 행선지 브리핑 완료',
+        delta: -20,
+        reason: '주취자 안전 귀가 호송 및 보호자 수당',
+        loadingTemplates: [
+          '{name}님이 만취자 택시 문 닫아주며 기사님께 고개 숙인 횟수 공제 중...',
         ],
       },
       {
@@ -394,11 +701,28 @@ const TAG_CATEGORIES = [
           '{name}님의 경사스러운 날을 맞아 주인공 특별 우대 할인율 적용 중...',
         ],
       },
+      {
+        id: 'sober-driver',
+        emoji: '🚙',
+        label: '오늘 술 참고 운전대 잡아서 다 같이 집까지 태워다 줌',
+        delta: -20,
+        reason: '지정 운전자 금주 희생 및 귀가 셔틀 수당',
+        loadingTemplates: [
+          '{name}님이 술 참고 운전대 잡은 귀가 셔틀 노선 거리 공제 중...',
+        ],
+      },
     ],
   },
 ];
 
-const PRESET_TAGS = TAG_CATEGORIES.flatMap((c) => c.tags);
+const COMMON_VISIBLE_COUNT = 4;
+
+const PRESET_TAGS = [
+  ...PLACE_THEMES.flatMap((t) => t.tags),
+  ...COMMON_CATEGORIES.flatMap((c) => c.tags),
+];
+
+const TAG_PLACE = Object.fromEntries(PLACE_THEMES.flatMap((t) => t.tags.map((tag) => [tag.id, t.id])));
 
 const NO_VILLAIN_VERDICT =
   '오늘 모임은 웬일로 아무도 진상을 안 부렸습니다. 하지만 10원 단위 자투리는 누군가 내야 하므로 제일 만만한 사람을 지목합니다.';
@@ -1232,17 +1556,35 @@ function StepTags({
   onRemoveCustomTag,
   settlement,
   total,
+  placeId,
+  setPlaceId,
   onStart,
 }) {
   const active = people.find((p) => p.id === activeId) || people[0];
   const activeRow = settlement?.rows.find((r) => r.id === active.id);
   const selected = selections[active.id] || [];
+  const appliedTags = activeRow?.tags ?? [];
+  const place = PLACE_THEMES.find((t) => t.id === placeId) || PLACE_THEMES[0];
+  const [expanded, setExpanded] = useState({});
   const tabsRef = useRef(null);
+  const placeTabsRef = useRef(null);
+
+  // 장소 탭 배지: 현재 피고인이 장소별로 체크한 태그 수
+  const placeCounts = {};
+  selected.forEach((id) => {
+    const pid = TAG_PLACE[id];
+    if (pid) placeCounts[pid] = (placeCounts[pid] || 0) + 1;
+  });
 
   useEffect(() => {
     const el = tabsRef.current?.querySelector(`[data-pid="${active.id}"]`);
     el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [active.id]);
+
+  useEffect(() => {
+    const el = placeTabsRef.current?.querySelector(`[data-place="${place.id}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [place.id]);
 
   const weightTone = !activeRow
     ? '#191F28'
@@ -1252,10 +1594,22 @@ function StepTags({
         ? '#00C471'
         : '#191F28';
 
-  const groups = [
-    { key: 'penalty', label: '가산세', color: '#F04452', bg: '#FFEEEE', cats: TAG_CATEGORIES.filter((c) => c.kind === 'penalty') },
-    { key: 'deduction', label: '공제', color: '#00A661', bg: '#E5F8EF', cats: TAG_CATEGORIES.filter((c) => c.kind === 'deduction') },
-  ];
+  const kindStyle = {
+    penalty: { label: '공통 가산세', color: '#F04452', bg: '#FFEEEE' },
+    deduction: { label: '공통 공제', color: '#00A661', bg: '#E5F8EF' },
+  };
+  const placePenalties = place.tags.filter((t) => t.delta > 0);
+  const placeDeductions = place.tags.filter((t) => t.delta < 0);
+
+  const renderRows = (tags) =>
+    tags.map((tag) => (
+      <TagRow
+        key={tag.id}
+        tag={tag}
+        checked={selected.includes(tag.id)}
+        onToggle={() => toggleTag(active.id, tag.id)}
+      />
+    ));
 
   return (
     <div className="pt-6 pb-40">
@@ -1307,6 +1661,47 @@ function StepTags({
         })}
       </div>
 
+      {/* 장소 테마 탭 */}
+      <p className="mt-4 px-5 text-[13px] font-semibold text-[#4E5968]">오늘 어디서 모였나요?</p>
+      <div
+        ref={placeTabsRef}
+        role="tablist"
+        aria-label="모임 장소"
+        className="tds-noscroll mt-2 px-5 flex gap-2 overflow-x-auto pb-1"
+      >
+        {PLACE_THEMES.map((t) => {
+          const isOn = t.id === place.id;
+          const count = placeCounts[t.id] || 0;
+          return (
+            <button
+              key={t.id}
+              data-place={t.id}
+              type="button"
+              role="tab"
+              aria-selected={isOn}
+              onClick={() => setPlaceId(t.id)}
+              className={`shrink-0 h-9 pl-3 pr-3 rounded-full flex items-center gap-1.5 text-[14px] font-semibold border transition-all duration-200 active:scale-95 ${
+                isOn
+                  ? 'bg-[#3182F6] border-[#3182F6] text-white shadow-sm'
+                  : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F9FAFB]'
+              }`}
+            >
+              <span aria-hidden>{t.emoji}</span>
+              {t.name}
+              {count > 0 && (
+                <span
+                  className={`tds-pop min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums ${
+                    isOn ? 'bg-white text-[#3182F6]' : 'bg-[#3182F6] text-white'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div key={active.id} className="px-5 mt-4 space-y-4 tds-fade-up">
         {/* 피고인 요약 */}
         <Card className="p-5">
@@ -1340,32 +1735,96 @@ function StepTags({
               </span>
             )}
           </div>
+          <div className="mt-3">
+            <p className="text-[12px] font-semibold text-[#8B95A1]">
+              적용 중인 태그 {appliedTags.length > 0 && <span className="text-[#3182F6]">{appliedTags.length}</span>}
+            </p>
+            {appliedTags.length === 0 ? (
+              <p className="mt-1 text-[12px] text-[#B0B8C1]">아직 없어요. 아래에서 죄목과 공로를 골라 주세요.</p>
+            ) : (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {appliedTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    title={tag.label}
+                    aria-label={`${tag.label} 해제`}
+                    onClick={() => toggleTag(active.id, tag.id)}
+                    className={`tds-pop max-w-full h-7 pl-2 pr-1.5 rounded-full flex items-center gap-1 text-[12px] transition-all active:scale-95 ${
+                      tag.delta > 0 ? 'bg-[#FFEEEE] hover:bg-[#FFE0E0]' : 'bg-[#E5F8EF] hover:bg-[#D5F3E5]'
+                    }`}
+                  >
+                    <span aria-hidden>{tag.emoji}</span>
+                    <span className="truncate max-w-[104px] text-[#4E5968]">{tag.label}</span>
+                    <span
+                      className="font-bold tabular-nums"
+                      style={{ color: tag.delta > 0 ? '#F04452' : '#00A661' }}
+                    >
+                      {fmtPct(tag.delta)}
+                    </span>
+                    <X size={13} strokeWidth={2.6} className="text-[#8B95A1]" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </Card>
 
-        {/* 프리셋 죄목 */}
-        {groups.map((g) =>
-          g.cats.map((cat) => (
+        {/* 장소 맞춤형 죄목 & 공제 */}
+        <Card key={place.id} className="p-2.5 tds-fade-up">
+          <div className="px-2.5 pt-2 pb-1.5 flex items-center gap-2">
+            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-[#3182F6] bg-[#E8F3FF]">
+              {place.emoji} 장소
+            </span>
+            <span className="text-[15px] font-semibold text-[#191F28]">[{place.name}] 맞춤형 죄목 & 공제</span>
+          </div>
+          <p className="px-2.5 pt-1 text-[12px] font-bold text-[#F04452]">가산세</p>
+          {renderRows(placePenalties)}
+          <p className="px-2.5 pt-2 text-[12px] font-bold text-[#00A661]">공제</p>
+          {renderRows(placeDeductions)}
+        </Card>
+
+        {/* 장소 불문 공통 카테고리 (기본 4개 + 체크된 항목, 나머지는 더보기) */}
+        {COMMON_CATEGORIES.map((cat) => {
+          const style = kindStyle[cat.kind];
+          const isOpen = !!expanded[cat.id];
+          const visible = isOpen
+            ? cat.tags
+            : cat.tags.filter((t, i) => i < COMMON_VISIBLE_COUNT || selected.includes(t.id));
+          const hiddenCount = cat.tags.length - visible.length;
+          return (
             <Card key={cat.id} className="p-2.5">
               <div className="px-2.5 pt-2 pb-1.5 flex items-center gap-2">
                 <span
                   className="text-[12px] font-bold px-2 py-0.5 rounded-md"
-                  style={{ color: g.color, backgroundColor: g.bg }}
+                  style={{ color: style.color, backgroundColor: style.bg }}
                 >
-                  {g.label}
+                  {style.label}
                 </span>
                 <span className="text-[15px] font-semibold text-[#191F28]">{cat.title}</span>
               </div>
-              {cat.tags.map((tag) => (
-                <TagRow
-                  key={tag.id}
-                  tag={tag}
-                  checked={selected.includes(tag.id)}
-                  onToggle={() => toggleTag(active.id, tag.id)}
-                />
-              ))}
+              {renderRows(visible)}
+              {(isOpen || hiddenCount > 0) && (
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setExpanded((prev) => ({ ...prev, [cat.id]: !isOpen }))}
+                  className="mt-1 w-full h-10 rounded-xl flex items-center justify-center gap-1 text-[13px] font-semibold text-[#4E5968] hover:bg-[#F2F4F6] active:scale-[0.98] transition-all"
+                >
+                  {isOpen ? (
+                    <>
+                      접기 <ChevronUp size={15} />
+                    </>
+                  ) : (
+                    <>
+                      + 나머지 {hiddenCount}개 항목 더보기 <ChevronDown size={15} />
+                    </>
+                  )}
+                </button>
+              )}
             </Card>
-          ))
-        )}
+          );
+        })}
 
         {/* 커스텀 죄목 */}
         <Card className="p-2.5">
@@ -1759,6 +2218,7 @@ export default function App() {
   const [selections, setSelections] = useState({});
   const [customTags, setCustomTags] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [placeId, setPlaceId] = useState(PLACE_THEMES[0].id);
   const [account, setAccount] = useState('');
   const [memo, setMemo] = useState('');
   const [toast, setToast] = useState(null);
@@ -1940,6 +2400,7 @@ export default function App() {
     setSelections({});
     setCustomTags([]);
     setActiveId(null);
+    setPlaceId(PLACE_THEMES[0].id);
     setAccount('');
     setMemo('');
     // 쌓인 단계 기록을 모두 되돌려 첫 화면(기록 없음)으로 돌아간다
@@ -1978,6 +2439,8 @@ export default function App() {
               onRemoveCustomTag={removeCustomTag}
               settlement={settlement}
               total={total}
+              placeId={placeId}
+              setPlaceId={setPlaceId}
               onStart={startJudging}
             />
           )}
