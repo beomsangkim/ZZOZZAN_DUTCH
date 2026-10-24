@@ -107,8 +107,6 @@ const LOADING_DURATION = 3000;
 const LOADING_INTERVAL = 750;
 const LOADING_TAG_SLOTS = 3;
 
-const DEFAULT_PEOPLE = ['김총무', '박빌런', '이얌체'];
-
 const FALLBACK_LOADING_POOL = [
   '테이블 위 빈 소주병·맥주병 개수와 영수증 내역 대조 중...',
   '누가 안주발 세웠는지 젓가락 동선 역추적 중...',
@@ -413,18 +411,14 @@ const NO_VILLAIN_VERDICT =
 let idSeq = 0;
 const uid = (prefix) => `${prefix}-${Date.now().toString(36)}-${(idSeq++).toString(36)}`;
 
-const makeDefaultPeople = () => DEFAULT_PEOPLE.map((name) => ({ id: uid('p'), name }));
-
 const fmtWon = (n) => Math.round(n).toLocaleString('ko-KR');
 
-const fmtExact = (n) =>
-  n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDiff = (n) => (n === 0 ? '±0' : `${n > 0 ? '+' : '-'}${fmtWon(Math.abs(n))}`);
 
-const fmtDiff = (n) => {
-  if (Math.abs(n) < 0.05) return '±0.0';
-  const abs = Math.abs(n).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return `${n > 0 ? '+' : '-'}${abs}`;
-};
+const peopleShortageMessage = (count) =>
+  count === 0
+    ? '아직 아무도 없어요. 더치페이는 최소 2명부터예요 🙋'
+    : '혼자서는 더치페이가 안 돼요. 1명만 더 데려오세요 👯';
 
 const fmtPct = (n) => `${n > 0 ? '+' : n < 0 ? '-' : '±'}${Math.abs(n)}%`;
 
@@ -540,7 +534,7 @@ function buildLoadingMessages(people, selections, tagMap) {
 /**
  * 제로섬 정산 엔진
  * - W_i = min(300, max(10, 100 + Σ delta))
- * - Exact_i = 총액 × W_i / ΣW  (화면 표시용 소수점 2자리)
+ * - Exact_i = 총액 × W_i / ΣW  (화면에는 1원 단위 반올림으로 표시)
  * - 송금액 = 10원 단위 내림 → 자투리 전액을 1등 빌런에게 독박
  * 정수 연산으로 내림을 계산해 부동소수점 오차 없이 합계 = 총액을 보장한다.
  */
@@ -578,7 +572,8 @@ function computeSettlement(total, people, selections, tagMap) {
   rows.forEach((r) => {
     r.exact = (total * r.weight) / totalWeight;
     r.floored = Math.floor((total * r.weight) / (totalWeight * 10)) * 10;
-    r.diff = r.exact - base;
+    // 화면에 보이는 반올림 금액끼리 빼서 표시 숫자가 서로 맞아떨어지게 한다
+    r.diff = Math.round(r.exact) - Math.round(base);
   });
 
   const flooredSum = rows.reduce((s, r) => s + r.floored, 0);
@@ -627,7 +622,7 @@ function buildShareText({ total, settlement, account, memo }) {
   out.push('📢 [토스 쪼잔정산] 초정밀 기여도 청구서');
   out.push(line);
   out.push(`💸 총 결제액: ${fmtWon(total)}원 (${sorted.length}명)`);
-  out.push(`📏 단순 1/N: ${fmtExact(base)}원 ← 이건 이제 무효입니다`);
+  out.push(`📏 단순 1/N: ${fmtWon(base)}원 ← 이건 이제 무효입니다`);
   out.push('');
   if (hasVillain) {
     out.push(`⚖️ [판결문] 오늘의 최고 빌런: ${villain.name}님 (가산세 ${fmtPct(surcharge)})`);
@@ -640,7 +635,7 @@ function buildShareText({ total, settlement, account, memo }) {
   sorted.forEach((r) => {
     const mark = r.isVillain ? '👑 ' : r.isSaint ? '😇 ' : '• ';
     out.push(`${mark}${r.name}: ${fmtWon(r.pay)}원`);
-    out.push(`   └ 팩트 청구액 ${fmtExact(r.exact)}원 (1/N 대비 ${fmtDiff(r.diff)}원)`);
+    out.push(`   └ 팩트 청구액 ${fmtWon(r.exact)}원 (1/N 대비 ${fmtDiff(r.diff)}원)`);
     if (r.isVillain && remainder > 0) {
       out.push(`   └ *(자투리 ${fmtWon(remainder)}원 빌런 독박 포함)`);
     }
@@ -776,7 +771,11 @@ function BottomCTA({ children, hint }) {
     <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30">
       <div className="h-6 bg-gradient-to-t from-[#F2F4F6] to-transparent pointer-events-none" />
       <div className="bg-[#F2F4F6] px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
-        {hint && <p className="text-center text-[13px] text-[#8B95A1] mb-2.5">{hint}</p>}
+        {[].concat(hint || []).map((line) => (
+          <p key={line} className="tds-fade-up text-center text-[13px] text-[#8B95A1] mb-1.5 last:mb-2.5">
+            {line}
+          </p>
+        ))}
         {children}
       </div>
     </div>
@@ -900,14 +899,11 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
 
   const amountTooSmall = total > 0 && total < MIN_AMOUNT;
   const canProceed = total >= MIN_AMOUNT && people.length >= MIN_PEOPLE;
-  const hint =
-    total === 0
-      ? '0원은 정산할 수 없어요. 우정도 공짜는 아닙니다'
-      : amountTooSmall
-        ? `${MIN_AMOUNT}원 미만은 쪼잔함 측정 장비가 작동하지 않아요`
-        : people.length < MIN_PEOPLE
-          ? `최소 ${MIN_PEOPLE}명은 있어야 누군가를 탓할 수 있어요`
-          : null;
+  const hint = [
+    total === 0 && '0원은 정산할 수 없어요. 우정도 공짜는 아닙니다',
+    amountTooSmall && `${MIN_AMOUNT}원 미만은 쪼잔함 측정 장비가 작동하지 않아요`,
+    people.length < MIN_PEOPLE && peopleShortageMessage(people.length),
+  ].filter(Boolean);
 
   return (
     <div className="px-5 pt-6 pb-40 space-y-4">
@@ -915,7 +911,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
         <h2 className="text-[26px] font-bold leading-[1.35] text-[#191F28]">
           오늘 얼마나 쓰셨나요?
           <br />
-          <span className="text-[#3182F6]">원 단위까지 따져드릴게요</span>
+          <span className="text-[#3182F6]">1원 단위까지 계산해 드릴게요</span>
         </h2>
         <p className="mt-2 text-[15px] text-[#8B95A1]">우정은 영원하지만, 계산은 정확해야 하니까요.</p>
       </div>
@@ -973,6 +969,15 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
           </span>
         </div>
 
+        {people.length === 0 && (
+          <div className="tds-fade-up mt-3 py-6 rounded-xl bg-[#F9FAFB] flex flex-col items-center text-center">
+            <span className="w-12 h-12 rounded-full bg-[#E8F3FF] flex items-center justify-center">
+              <Users size={22} className="text-[#3182F6]" />
+            </span>
+            <p className="mt-3 text-[15px] font-semibold text-[#4E5968]">아직 출석한 피고인이 없어요</p>
+            <p className="mt-1 text-[13px] text-[#8B95A1]">같이 먹고 마신 사람을 2명 이상 추가해 주세요</p>
+          </div>
+        )}
         <ul className="mt-3 divide-y divide-[#F2F4F6]">
           {people.map((p) => (
             <li key={p.id} className="tds-fade-up flex items-center gap-3 py-3">
@@ -981,9 +986,8 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
               <button
                 type="button"
                 onClick={() => onRemovePerson(p.id)}
-                disabled={people.length <= MIN_PEOPLE}
                 aria-label={`${p.name} 삭제`}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-[#B0B8C1] hover:bg-[#FFEEEE] hover:text-[#F04452] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#B0B8C1] transition-all active:scale-90"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[#B0B8C1] hover:bg-[#FFEEEE] hover:text-[#F04452] transition-all active:scale-90"
               >
                 <X size={18} />
               </button>
@@ -1343,7 +1347,7 @@ function StepTags({
             </span>
             {activeRow && total > 0 && (
               <span className="text-[#4E5968] font-medium tabular-nums">
-                예상 부담 {fmtExact(activeRow.exact)}원
+                예상 부담 {fmtWon(activeRow.exact)}원
               </span>
             )}
           </div>
@@ -1500,8 +1504,8 @@ function CountUpWon({ value, className = '' }) {
 
 function ReceiptItem({ row, settlement, delay }) {
   const { remainder } = settlement;
-  const diffColor = row.diff > 0.05 ? '#F04452' : row.diff < -0.05 ? '#00A661' : '#8B95A1';
-  const diffDot = row.diff > 0.05 ? '🔴' : row.diff < -0.05 ? '🟢' : '⚪';
+  const diffColor = row.diff > 0 ? '#F04452' : row.diff < 0 ? '#00A661' : '#8B95A1';
+  const diffDot = row.diff > 0 ? '🔴' : row.diff < 0 ? '🟢' : '⚪';
 
   return (
     <div className="tds-fade-up py-5 first:pt-1" style={{ animationDelay: `${delay}ms` }}>
@@ -1525,7 +1529,7 @@ function ReceiptItem({ row, settlement, delay }) {
           <p className="text-[12px] text-[#8B95A1] tabular-nums">
             가중치 {row.weight}
             {row.clampedMax && <span className="text-[#F04452]"> (상한 적용)</span>}
-            {row.clamped && <span className="text-[#00A661]"> (최소 방어)</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(3)}%
+            {row.clamped && <span className="text-[#00A661]"> (최소 방어)</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(1)}%
           </p>
         </div>
         <div className="text-right">
@@ -1539,7 +1543,7 @@ function ReceiptItem({ row, settlement, delay }) {
       <div className="mt-3 ml-[52px] rounded-xl bg-[#F9FAFB] p-3 space-y-1.5 text-[13px]">
         <div className="flex justify-between gap-2">
           <span className="text-[#8B95A1]">초정밀 팩트 청구액</span>
-          <span className="font-semibold text-[#191F28] tabular-nums">{fmtExact(row.exact)}원</span>
+          <span className="font-semibold text-[#191F28] tabular-nums">{fmtWon(row.exact)}원</span>
         </div>
         <div className="flex justify-between gap-2">
           <span className="text-[#8B95A1]">1/N 대비</span>
@@ -1632,7 +1636,7 @@ function StepResult({ total, settlement, account, setAccount, memo, setMemo, onC
         <div className="border-x border-[#F2F4F6]">
           <p className="text-[12px] text-[#8B95A1]">단순 1/N</p>
           <p className="mt-1 text-[15px] font-bold text-[#8B95A1] tabular-nums line-through decoration-[#F04452]/70">
-            {fmtWon(Math.floor(base))}원
+            {fmtWon(base)}원
           </p>
         </div>
         <div>
@@ -1762,7 +1766,7 @@ function ManualCopySheet({ text, onClose }) {
 export default function App() {
   const [step, setStep] = useState(1);
   const [total, setTotal] = useState(0);
-  const [people, setPeople] = useState(makeDefaultPeople);
+  const [people, setPeople] = useState([]);
   const [selections, setSelections] = useState({});
   const [customTags, setCustomTags] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -1818,10 +1822,6 @@ export default function App() {
   };
 
   const removePerson = (id) => {
-    if (people.length <= MIN_PEOPLE) {
-      showToast(`최소 ${MIN_PEOPLE}명은 있어야 정산이 성립해요`, 'error');
-      return;
-    }
     setPeople((prev) => prev.filter((p) => p.id !== id));
     setSelections((prev) => {
       const next = { ...prev };
@@ -1888,7 +1888,7 @@ export default function App() {
   const goStep2 = () => {
     if (total <= 0) return showToast('0원은 정산할 수 없어요', 'error');
     if (total < MIN_AMOUNT) return showToast(`${MIN_AMOUNT}원 이상 입력해 주세요`, 'error');
-    if (people.length < MIN_PEOPLE) return showToast(`최소 ${MIN_PEOPLE}명이 필요해요`, 'error');
+    if (people.length < MIN_PEOPLE) return showToast(peopleShortageMessage(people.length), 'error');
     if (!people.some((p) => p.id === activeId)) setActiveId(people[0].id);
     setStep(2);
   };
@@ -1917,7 +1917,7 @@ export default function App() {
 
   const restart = () => {
     setTotal(0);
-    setPeople(makeDefaultPeople());
+    setPeople([]);
     setSelections({});
     setCustomTags([]);
     setActiveId(null);
