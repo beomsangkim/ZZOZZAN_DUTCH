@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   Check,
-  ChevronLeft,
   Copy,
   Crown,
   Gavel,
@@ -827,33 +826,23 @@ function Toast({ toast }) {
   );
 }
 
-function Header({ step, onBack }) {
-  const titles = ['', '정산 정보 입력', '인간적 기여도 평가', '영수증 정밀 감사 중', '최종 판결문'];
+// 뒤로가기·제목은 앱인토스 내비게이션 바가 담당하므로, 미니앱은 단계 진행 바만 보여준다.
+function StepProgress({ step }) {
+  const labels = ['', '정산 정보 입력', '인간적 기여도 평가', '영수증 정밀 감사 중', '최종 판결문'];
   return (
-    <header className="sticky top-0 z-20 bg-[#F2F4F6]/90 backdrop-blur">
-      <div className="h-14 px-2 flex items-center">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={!onBack}
-          aria-label="뒤로 가기"
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-            onBack ? 'text-[#191F28] hover:bg-black/5 active:scale-90' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          <ChevronLeft size={26} />
-        </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-[#191F28] -ml-10 pointer-events-none">
-          {titles[step]}
-        </h1>
-      </div>
-      <div className="h-[3px] bg-[#E5E8EB]">
-        <div
-          className="h-full bg-[#3182F6] transition-all duration-500 ease-out"
-          style={{ width: `${(step / 4) * 100}%` }}
-        />
-      </div>
-    </header>
+    <div
+      className="sticky top-0 z-20 h-[3px] bg-[#E5E8EB]"
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={4}
+      aria-valuenow={step}
+      aria-label={`${step}/4단계 ${labels[step]}`}
+    >
+      <div
+        className="h-full bg-[#3182F6] transition-all duration-500 ease-out"
+        style={{ width: `${(step / 4) * 100}%` }}
+      />
+    </div>
   );
 }
 
@@ -1794,6 +1783,32 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [step]);
 
+  // 단계 이동을 history에 쌓아, 앱인토스 내비게이션 바의 뒤로가기(=history.back)로 이전 단계로 돌아가게 한다.
+  // 첫 화면에서는 쌓인 기록이 없으므로 뒤로가기를 누르면 미니앱이 종료된다.
+  const canLeaveStep1Ref = useRef(false);
+  canLeaveStep1Ref.current = total >= MIN_AMOUNT && people.length >= MIN_PEOPLE;
+
+  useEffect(() => {
+    window.history.replaceState({ step: 1, depth: 0 }, '');
+    const onPopState = (e) => {
+      const target = e.state?.step ?? 1;
+      if (target > 1 && !canLeaveStep1Ref.current) {
+        window.history.replaceState({ step: 1, depth: 0 }, '');
+        setStep(1);
+        return;
+      }
+      setStep(target);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const pushStep = (next) => {
+    const depth = (window.history.state?.depth ?? 0) + 1;
+    window.history.pushState({ step: next, depth }, '');
+    setStep(next);
+  };
+
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const showToast = useCallback((message, type = 'success') => {
@@ -1890,20 +1905,24 @@ export default function App() {
     if (total < MIN_AMOUNT) return showToast(`${MIN_AMOUNT}원 이상 입력해 주세요`, 'error');
     if (people.length < MIN_PEOPLE) return showToast(peopleShortageMessage(people.length), 'error');
     if (!people.some((p) => p.id === activeId)) setActiveId(people[0].id);
-    setStep(2);
+    pushStep(2);
   };
 
   const startJudging = () => {
     if (!settlement || total < MIN_AMOUNT) {
       showToast('정산 금액을 다시 확인해 주세요', 'error');
-      setStep(1);
+      window.history.back();
       return;
     }
     setLoadingMessages(buildLoadingMessages(people, selections, tagMap));
-    setStep(3);
+    pushStep(3);
   };
 
-  const finishLoading = useCallback(() => setStep(4), []);
+  // 로딩 화면은 기록에서 결과 화면으로 바꿔치기해, 결과에서 뒤로가기 시 로딩을 다시 보지 않고 태그 화면으로 간다
+  const finishLoading = useCallback(() => {
+    window.history.replaceState({ ...window.history.state, step: 4 }, '');
+    setStep(4);
+  }, []);
 
   const handleCopy = async () => {
     const text = buildShareText({ total, settlement, account, memo });
@@ -1923,17 +1942,18 @@ export default function App() {
     setActiveId(null);
     setAccount('');
     setMemo('');
+    // 쌓인 단계 기록을 모두 되돌려 첫 화면(기록 없음)으로 돌아간다
+    const depth = window.history.state?.depth ?? 0;
+    if (depth > 0) window.history.go(-depth);
     setStep(1);
     showToast('새 재판을 시작합니다. 우정은 리셋되지 않아요');
   };
-
-  const back = step === 2 ? () => setStep(1) : step === 4 ? () => setStep(2) : null;
 
   return (
     <div className="min-h-screen bg-[#F2F4F6]">
       <style>{GLOBAL_STYLE}</style>
       <div className="relative max-w-md mx-auto min-h-screen bg-[#F2F4F6]">
-        <Header step={step} onBack={back} />
+        <StepProgress step={step} />
         <main key={step}>
           {step === 1 && (
             <StepBasicInfo
@@ -1971,7 +1991,7 @@ export default function App() {
               memo={memo}
               setMemo={setMemo}
               onCopy={handleCopy}
-              onEditTags={() => setStep(2)}
+              onEditTags={() => window.history.back()}
               onRestart={restart}
             />
           )}
