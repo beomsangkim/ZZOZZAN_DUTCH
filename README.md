@@ -3,6 +3,7 @@
 초정밀 기여도 기반 우정 파괴 N빵 정산기. 서버 없이 100% 클라이언트에서 동작하는 토스 미니앱 프로토타입입니다.
 
 - 핵심 로직/UI: `src/App.jsx` (단일 파일 컴포넌트)
+- 로딩 화면 문구는 선택된 죄목과 참가자 이름으로 동적 생성 (`buildLoadingMessages`)
 - 스택: React 18 + Tailwind CSS 3 + lucide-react (Vite)
 
 ```bash
