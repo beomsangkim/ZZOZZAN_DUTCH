@@ -46,7 +46,7 @@ const SENTENCING_PRESETS = [
 // ── 커스텀 죄목 양형 추론 엔진 ──
 // 1) 문맥 규칙: 같은 명사라도 서술어에 따라 가산/공제가 갈리는 경우를 먼저 판별
 // 2) 카테고리 규칙: 위에서부터 먼저 걸리는 키워드 적용
-// 한 글자 키워드는 오탐지('토스', '서울' 등)를 만들므로 쓰지 않는다.
+// 한 글자 키워드는 다른 단어 속에서 오탐지를 만들므로 쓰지 않는다.
 const CUSTOM_CONTEXT_RULES = [
   {
     triggers: ['고기', '불판'],
@@ -619,7 +619,7 @@ function buildShareText({ total, settlement, account, memo }) {
   const { sorted, villain, hasVillain, surcharge, verdict, remainder, base } = settlement;
   const line = '━━━━━━━━━━━━━━━━━━';
   const out = [];
-  out.push('📢 [토스 쪼잔정산] 초정밀 기여도 청구서');
+  out.push('📢 [쪼잔정산] 초정밀 기여도 청구서');
   out.push(line);
   out.push(`💸 총 결제액: ${fmtWon(total)}원 (${sorted.length}명)`);
   out.push(`📏 단순 1/N: ${fmtWon(base)}원 ← 이건 이제 무효입니다`);
@@ -1702,7 +1702,7 @@ function StepResult({ total, settlement, account, setAccount, memo, setMemo, onC
           value={account}
           maxLength={60}
           onChange={(e) => setAccount(e.target.value)}
-          placeholder="계좌번호 또는 토스아이디 (예: 토스뱅크 1000-0000-0000)"
+          placeholder="계좌번호 또는 송금 아이디 (예: OO은행 1000-0000-0000)"
           className="mt-3 w-full h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
         />
         <input

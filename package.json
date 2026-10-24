@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:toss": "vite build && ait build",
+    "build:ait": "vite build && ait build",
     "preview": "vite preview",
     "deploy": "ait deploy"
   },
