@@ -18,6 +18,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import { Device } from '@apps-in-toss/web-framework';
 
 /* ──────────────────────────────────────────────────────────────
  * 상수 & 프리셋
@@ -83,7 +84,7 @@ const COMBO_RULES = [
   },
 ];
 
-// 공로 세탁 방지법: 중범죄자(가산세 3건 이상 또는 가산세 합계 +45% 이상)의 공제 혜택 50% 삭감
+// 공로 세탁 방지법: 중범죄자(가산세 3건 이상 또는 가산세 합계 +45% 이상)의 공제 혜택 50% 삭감 (실비 공제 제외)
 const HYPOCRISY_MIN_COUNT = 3;
 const HYPOCRISY_MIN_SUM = 45;
 const MIN_PEOPLE = 2;
@@ -264,7 +265,7 @@ const PRESET_TAGS = [
     id: 'treasurer',
     emoji: '💳',
     label: '내 카드로 선결제 & 총무 담당',
-    delta: -10,
+    delta: -15,
     reason: '선결제 총대 및 정산 수금 수고비',
     loadingTemplates: [
       '{name}님의 카드값 선결제 희생 및 미입금자 추심 수고비 반영 중...',
@@ -372,6 +373,7 @@ const PRESET_TAGS = [
     emoji: '🧹',
     label: '자취방 제공 & 배달 쓰레기 독박',
     delta: -30,
+    realCost: true,
     reason: '방 대관료 및 플라스틱 용기 분리수거',
     loadingTemplates: [
       '{name}님의 자취방 제공 및 치킨 박스·뼈다귀 분리수거 노동 가치 환산 중...',
@@ -773,6 +775,7 @@ const PRESET_TAGS = [
     emoji: '🚗',
     label: '본인 차 제공 & 장거리 왕복 운전',
     delta: -35,
+    realCost: true,
     reason: '전담 기사 수고비 및 차량 감가상각',
     loadingTemplates: [
       '{name}님의 왕복 운전 피로도와 타이어 마모도 복지 감액 중...',
@@ -877,9 +880,31 @@ const PRESET_TAGS = [
     emoji: '🚙',
     label: '술 참고 운전해서 다 데려다 줌',
     delta: -20,
+    realCost: true,
     reason: '지정 운전자 금주 희생 및 귀가 셔틀 수당',
     loadingTemplates: [
       '{name}님이 술 참고 운전대 잡은 귀가 셔틀 노선 거리 공제 중...',
+    ],
+  },
+  {
+    id: 'heavy-drinker',
+    emoji: '🍶',
+    label: '혼자 술 제일 많이 마심 (2병+)',
+    delta: 20,
+    reason: '술값 지분 독점 및 주량 과시세',
+    verdict: '테이블 위 빈 병의 절반이 본인 앞에 서 있습니다. 술값은 마신 만큼 내는 겁니다.',
+    loadingTemplates: [
+      '{name}님 앞에 늘어선 빈 소주병 개수 세는 중...',
+    ],
+  },
+  {
+    id: 'light-drinker',
+    emoji: '🧃',
+    label: '술은 거의 안 마심 (음료만)',
+    delta: -15,
+    reason: '술값 분리 정산 공제',
+    loadingTemplates: [
+      '{name}님의 음료수 영수증과 술값 분리 정산 중...',
     ],
   },
 ];
@@ -893,14 +918,14 @@ const CATEGORY_TABS = [
   { id: 'meat', emoji: '🥩', name: '고기·곱창', desc: '고깃집·곱창', tagIds: ['no-grill', 'burn-meat', 'one-bite', 'garlic-hog', 'grill-master'] },
   { id: 'seafood_stew', emoji: '🐟', name: '회·전골·샤브', desc: '횟집·전골·샤브샤브', tagIds: ['engawa-steal', 'shabu-meat-only', 'skidashi-full', 'maeuntang-ramen', 'shrimp-peeler'] },
   { id: 'meal', emoji: '🥟', name: '중식·양식·분식', desc: '중식·양식·분식', tagIds: ['tangsuyuk-thief', 'pasta-shrimp', 'fried-soak', 'table-setter'] },
-  { id: 'pub', emoji: '🍻', name: '포차·이자카야·전', desc: '포차·이자카야·전집', tagIds: ['expensive-booze', 'stew-meat', 'skewer-unpin', 'jeon-center', 'basic-snack', 'fake-soju', 'angel-care'] },
+  { id: 'pub', emoji: '🍻', name: '포차·이자카야·전', desc: '포차·이자카야·전집', tagIds: ['heavy-drinker', 'expensive-booze', 'stew-meat', 'skewer-unpin', 'jeon-center', 'basic-snack', 'fake-soju', 'light-drinker', 'angel-care'] },
   { id: 'play', emoji: '🎳', name: '노래방·볼링·당구', desc: '노래방·볼링·당구·게임', tagIds: ['mic-hog', 'interlude-skip', 'team-troll', 'mouth-player', 'game-carry'] },
   { id: 'cafe_study', emoji: '☕', name: '카페·스터디·방탈출', desc: '카페·스터디·방탈출', tagIds: ['bread-tray', 'strawberry-thief', 'study-talker', 'escape-coward', 'luxury-dessert', 'photo-master', 'study-prep'] },
   { id: 'travel', emoji: '🏕️', name: '여행·MT·캠핑', desc: '여행·MT·캠핑', tagIds: ['camp-lazy', 'mart-cart', 'bed-occupation', 'copilot-sleep', 'driver-car', 'camp-chef'] },
 ];
 
 // 장소 불문 공통 태그. 기본으로 접혀 있고, 체크된 태그만 접힌 상태에서도 보인다.
-const MORE_TAG_IDS = ['drunk-call', 'brag-radio', 'sleep-2nd', 'ghost', 'taxi-escort', 'wait-master', 'late-join', 'vip-hero', 'sober-driver'];
+const MORE_TAG_IDS = ['heavy-drinker', 'light-drinker', 'drunk-call', 'brag-radio', 'sleep-2nd', 'ghost', 'taxi-escort', 'wait-master', 'late-join', 'vip-hero', 'sober-driver'];
 
 const NO_VILLAIN_VERDICT =
   '오늘 모임은 웬일로 아무도 진상을 안 부렸습니다. 하지만 10원 단위 자투리는 누군가 내야 하므로 제일 만만한 사람을 지목합니다.';
@@ -1058,9 +1083,11 @@ function computeAutoPenalties(tags) {
     if (hit) extras.push({ key: id, label, delta, amplify: true });
   });
 
+  // 차량·자취방처럼 실제 돈이 든 공제(realCost)는 '세탁'이 아니므로 삭감하지 않는다
+  const launderable = tags.filter((t) => t.delta < 0 && !t.realCost).reduce((s, t) => s + t.delta, 0);
   const isHeavyOffender = penaltyTags.length >= HYPOCRISY_MIN_COUNT || penaltySum >= HYPOCRISY_MIN_SUM;
-  if (isHeavyOffender && deductionSum < 0) {
-    const cut = Math.round(Math.abs(deductionSum) * 0.5);
+  if (isHeavyOffender && launderable < 0) {
+    const cut = Math.round(Math.abs(launderable) * 0.5);
     extras.push({
       key: 'hypocrisy',
       label: `🚫 공로 세탁 적발 (중범죄자 할인 50% 강제 삭감: +${cut}%)`,
@@ -1237,10 +1264,26 @@ async function copyToClipboard(text) {
   }
 }
 
+// 누를 때마다 손끝으로 확인시켜 주는 햅틱. 토스 앱 밖에서는 브리지가 없어 실패하므로 무시한다.
+function haptic(type = 'tickWeak') {
+  try {
+    Promise.resolve(Device.triggerHaptic({ type })).catch(() => {});
+  } catch {
+    /* 웹 브라우저 등 토스 앱 밖 */
+  }
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
 function useCountUp(target, duration = 900) {
   const [value, setValue] = useState(0);
   useEffect(() => {
     let raf;
+    if (prefersReducedMotion()) {
+      setValue(target);
+      return undefined;
+    }
     const start = performance.now();
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
@@ -1279,9 +1322,12 @@ const GLOBAL_STYLE = `
 .tds-shake { animation: tds-shake .4s ease; }
 .tds-noscroll::-webkit-scrollbar { display: none; }
 .tds-noscroll { scrollbar-width: none; }
-input[type=range].tds-range { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px; outline: none; }
-input[type=range].tds-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
-input[type=range].tds-range::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 9999px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+input[type=range].tds-range { -webkit-appearance: none; appearance: none; height: 32px; background-size: 100% 6px !important; background-repeat: no-repeat !important; background-position: center !important; outline: none; }
+input[type=range].tds-range::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
+input[type=range].tds-range::-moz-range-thumb { width: 28px; height: 28px; border: 0; border-radius: 9999px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
 `;
 
 function Card({ children, className = '', style }) {
@@ -1298,9 +1344,9 @@ function PrimaryButton({ children, onClick, disabled, className = '', icon: Icon
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-full h-14 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.98] ${
+      className={`w-full h-14 rounded-2xl text-[19px] font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.98] ${
         disabled
-          ? 'bg-[#E5E8EB] text-[#B0B8C1] cursor-not-allowed active:scale-100'
+          ? 'bg-[#E5E8EB] text-[#8B95A1] cursor-not-allowed active:scale-100'
           : 'bg-[#3182F6] text-white hover:bg-[#1B64DA] shadow-[0_4px_14px_rgba(49,130,246,0.35)]'
       } ${className}`}
     >
@@ -1329,7 +1375,7 @@ function BottomCTA({ children, hint }) {
       <div className="h-6 bg-gradient-to-t from-[#F2F4F6] to-transparent pointer-events-none" />
       <div className="bg-[#F2F4F6] px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
         {[].concat(hint || []).map((line) => (
-          <p key={line} className="tds-fade-up text-center text-[13px] text-[#8B95A1] mb-1.5 last:mb-2.5">
+          <p key={line} className="tds-fade-up text-center text-[14px] font-medium text-[#4E5968] mb-1.5 last:mb-2.5">
             {line}
           </p>
         ))}
@@ -1341,16 +1387,16 @@ function BottomCTA({ children, hint }) {
 
 function DeltaBadge({ delta, size = 'md' }) {
   const isPenalty = delta > 0;
-  const cls = isPenalty ? 'bg-[#FFEEEE] text-[#F04452]' : 'bg-[#E5F8EF] text-[#00A661]';
-  const sz = size === 'sm' ? 'text-[11px] px-1.5 py-0.5' : 'text-[13px] px-2 py-1';
+  const cls = isPenalty ? 'bg-[#FFEEEE] text-[#D22030]' : 'bg-[#E5F8EF] text-[#00804A]';
+  const sz = size === 'sm' ? 'text-[13px] px-1.5 py-0.5' : 'text-[13px] px-2 py-1';
   return <span className={`shrink-0 rounded-md font-bold tabular-nums ${cls} ${sz}`}>{fmtPct(delta)}</span>;
 }
 
 function Avatar({ name, tone = 'blue', size = 40 }) {
   const tones = {
-    blue: 'bg-[#E8F3FF] text-[#3182F6]',
-    red: 'bg-[#FFEEEE] text-[#F04452]',
-    green: 'bg-[#E5F8EF] text-[#00A661]',
+    blue: 'bg-[#E8F3FF] text-[#1B64DA]',
+    red: 'bg-[#FFEEEE] text-[#D22030]',
+    green: 'bg-[#E5F8EF] text-[#00804A]',
     gray: 'bg-[#F2F4F6] text-[#4E5968]',
   };
   return (
@@ -1379,7 +1425,16 @@ function Toast({ toast }) {
       >
         <Icon size={13} strokeWidth={3} className="text-white" />
       </span>
-      <span className="text-white text-[15px] font-medium leading-snug">{toast.message}</span>
+      <span className="flex-1 text-white text-[15px] font-medium leading-snug">{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          onClick={toast.action.onClick}
+          className="shrink-0 h-11 -my-2 px-3 rounded-xl text-[15px] font-bold text-[#64A8FF] active:scale-95 transition-transform"
+        >
+          {toast.action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -1458,9 +1513,9 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
         <h2 className="text-[26px] font-bold leading-[1.35] text-[#191F28]">
           오늘 얼마나 쓰셨나요?
           <br />
-          <span className="text-[#3182F6]">1원 단위까지 계산해 드릴게요</span>
+          <span className="text-[#1B64DA]">1원 단위까지 계산해 드릴게요</span>
         </h2>
-        <p className="mt-2 text-[15px] text-[#8B95A1]">우정은 영원하지만, 계산은 정확해야 하니까요.</p>
+        <p className="mt-2 text-[15px] text-[#4E5968]">우정은 영원하지만, 계산은 정확해야 하니까요.</p>
       </div>
 
       <Card className="p-5 tds-fade-up" style={{ animationDelay: '60ms' }}>
@@ -1480,7 +1535,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
           />
           <span className="text-[24px] font-bold text-[#191F28] pb-1">원</span>
         </div>
-        <p className="mt-2 h-5 text-[13px] text-[#8B95A1]">{toKoreanUnit(total)}</p>
+        <p className="mt-2 h-5 text-[13px] text-[#6B7684]">{toKoreanUnit(total)}</p>
         <div className="mt-3 grid grid-cols-4 gap-2">
           {[
             ['+1만', 10_000],
@@ -1491,7 +1546,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
               key={label}
               type="button"
               onClick={() => addAmount(amount)}
-              className="h-10 rounded-xl bg-[#F2F4F6] text-[14px] font-semibold text-[#4E5968] hover:bg-[#E5E8EB] active:scale-95 transition-all"
+              className="h-12 rounded-xl bg-[#F2F4F6] text-[15px] font-bold text-[#4E5968] hover:bg-[#E5E8EB] active:scale-95 transition-all"
             >
               {label}
             </button>
@@ -1499,7 +1554,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
           <button
             type="button"
             onClick={() => setTotal(0)}
-            className="h-10 rounded-xl bg-[#F2F4F6] text-[14px] font-semibold text-[#8B95A1] hover:bg-[#E5E8EB] active:scale-95 transition-all flex items-center justify-center gap-1"
+            className="h-12 rounded-xl bg-[#F2F4F6] text-[15px] font-bold text-[#4E5968] hover:bg-[#E5E8EB] active:scale-95 transition-all flex items-center justify-center gap-1"
           >
             <RotateCcw size={13} /> 초기화
           </button>
@@ -1511,18 +1566,18 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
           <span className="text-[14px] font-medium text-[#4E5968] flex items-center gap-1.5">
             <Users size={16} /> 참가자
           </span>
-          <span className="text-[13px] text-[#8B95A1] tabular-nums">
-            <b className="text-[#3182F6]">{people.length}</b> / {MAX_PEOPLE}명
+          <span className="text-[13px] text-[#6B7684] tabular-nums">
+            <b className="text-[#1B64DA]">{people.length}</b> / {MAX_PEOPLE}명
           </span>
         </div>
 
         {people.length === 0 && (
           <div className="tds-fade-up mt-3 py-6 rounded-xl bg-[#F9FAFB] flex flex-col items-center text-center">
             <span className="w-12 h-12 rounded-full bg-[#E8F3FF] flex items-center justify-center">
-              <Users size={22} className="text-[#3182F6]" />
+              <Users size={22} className="text-[#1B64DA]" />
             </span>
             <p className="mt-3 text-[15px] font-semibold text-[#4E5968]">아직 출석한 피고인이 없어요</p>
-            <p className="mt-1 text-[13px] text-[#8B95A1]">같이 먹고 마신 사람을 2명 이상 추가해 주세요</p>
+            <p className="mt-1 text-[13px] text-[#4E5968]">같이 먹고 마신 사람을 2명 이상 추가해 주세요</p>
           </div>
         )}
         <ul className="mt-3 divide-y divide-[#F2F4F6]">
@@ -1534,7 +1589,7 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
                 type="button"
                 onClick={() => onRemovePerson(p.id)}
                 aria-label={`${p.name} 삭제`}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-[#B0B8C1] hover:bg-[#FFEEEE] hover:text-[#F04452] transition-all active:scale-90"
+                className="w-11 h-11 -mr-1 rounded-full flex items-center justify-center text-[#6B7684] hover:bg-[#FFEEEE] hover:text-[#D22030] transition-all active:scale-90"
               >
                 <X size={18} />
               </button>
@@ -1553,18 +1608,18 @@ function StepBasicInfo({ total, setTotal, people, onAddPerson, onRemovePerson, s
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) submitName();
               }}
-              className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
+              className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#8B95A1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
             />
             <button
               type="button"
               onClick={submitName}
-              className="h-12 px-4 rounded-xl bg-[#3182F6] text-white text-[15px] font-semibold flex items-center gap-1 hover:bg-[#1B64DA] active:scale-95 transition-all"
+              className="h-12 px-4 rounded-xl bg-[#1B64DA] text-white text-[15px] font-bold flex items-center gap-1 hover:bg-[#1B64DA] active:scale-95 transition-all"
             >
               <UserPlus size={17} /> 추가
             </button>
           </div>
         ) : (
-          <p className="mt-2 text-[13px] text-[#8B95A1] text-center py-2">
+          <p className="mt-2 text-[13px] text-[#6B7684] text-center py-2">
             10명이 넘으면 총무도 누가 누군지 기억 못 해요
           </p>
         )}
@@ -1624,7 +1679,7 @@ function TagRow({ tag, checked, onToggle, onDelete }) {
         </span>
         <span className="mt-1 flex items-center gap-2">
           <DeltaBadge delta={tag.delta} size="sm" />
-          <span className="min-w-0 text-[13px] text-[#8B95A1] truncate">{tag.reason}</span>
+          <span className="min-w-0 text-[13px] text-[#4E5968] truncate">{tag.reason}</span>
         </span>
       </span>
       <span className="flex items-center">
@@ -1636,7 +1691,7 @@ function TagRow({ tag, checked, onToggle, onDelete }) {
               e.stopPropagation();
               onDelete();
             }}
-            className="w-9 h-9 -mr-1 rounded-full flex items-center justify-center text-[#B0B8C1] hover:text-[#F04452] hover:bg-[#FFEEEE] transition-all active:scale-90"
+            className="w-11 h-11 -mr-1 rounded-full flex items-center justify-center text-[#6B7684] hover:text-[#D22030] hover:bg-[#FFEEEE] transition-all active:scale-90"
           >
             <Trash2 size={16} />
           </button>
@@ -1707,18 +1762,18 @@ function CustomTagForm({ onAdd }) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
           }}
-          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:border-[#3182F6] transition-colors"
+          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#E5E8EB] text-[15px] text-[#191F28] placeholder:text-[#8B95A1] outline-none focus:border-[#3182F6] transition-colors"
         />
       </div>
       <div className="min-h-7 mt-1.5 flex items-center">
         {autoApplied ? (
-          <p key={detected.keyword} className="tds-fade-up text-[12px] leading-snug text-[#3182F6] font-medium break-keep">
+          <p key={detected.keyword} className="tds-fade-up text-[13px] leading-snug text-[#1B64DA] font-medium break-keep">
             💡 '{detected.keyword}' 감지 → {detected.emoji} {fmtPct(detected.delta)} ({detected.category}) 양형 기준 자동 적용
           </p>
         ) : touched ? (
-          <p className="text-[12px] text-[#8B95A1]">재판부 직권으로 형량을 직접 조정 중이에요</p>
+          <p className="text-[13px] text-[#6B7684]">재판부 직권으로 형량을 직접 조정 중이에요</p>
         ) : (
-          <p className="text-[12px] text-[#B0B8C1]">키워드를 넣으면 양형 기준이 자동 추천돼요</p>
+          <p className="text-[13px] text-[#6B7684]">키워드를 넣으면 양형 기준이 자동 추천돼요</p>
         )}
       </div>
 
@@ -1726,7 +1781,7 @@ function CustomTagForm({ onAdd }) {
         <span className="text-[13px] font-medium text-[#4E5968]">가산율</span>
         <span className="text-[18px] font-bold tabular-nums transition-colors" style={{ color }}>
           {fmtPct(delta)}
-          <span className="ml-1 text-[12px] font-medium text-[#8B95A1]">
+          <span className="ml-1 text-[13px] font-medium text-[#6B7684]">
             {delta > 0 ? '가산세' : delta < 0 ? '공제' : '무의미'}
           </span>
         </span>
@@ -1745,14 +1800,14 @@ function CustomTagForm({ onAdd }) {
               className={`py-1.5 rounded-xl flex flex-col items-center justify-center border transition-all duration-200 active:scale-95 ${
                 selected
                   ? isPenalty
-                    ? 'bg-[#FFEEEE] border-[#F04452] text-[#F04452]'
-                    : 'bg-[#E5F8EF] border-[#00C471] text-[#00A661]'
+                    ? 'bg-[#FFEEEE] border-[#F04452] text-[#D22030]'
+                    : 'bg-[#E5F8EF] border-[#00C471] text-[#00804A]'
                   : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F2F4F6]'
               }`}
             >
               <span className="text-[15px] leading-none">{preset.emoji}</span>
-              <span className="mt-1 text-[11px] font-medium leading-none whitespace-nowrap">{preset.label}</span>
-              <span className="mt-0.5 text-[11px] font-bold leading-tight tabular-nums">{fmtPct(preset.delta)}</span>
+              <span className="mt-1 text-[13px] font-medium leading-none whitespace-nowrap">{preset.label}</span>
+              <span className="mt-0.5 text-[13px] font-bold leading-tight tabular-nums">{fmtPct(preset.delta)}</span>
             </button>
           );
         })}
@@ -1771,7 +1826,7 @@ function CustomTagForm({ onAdd }) {
         }}
         aria-label="가산율"
       />
-      <div className="mt-1.5 flex justify-between text-[11px] text-[#B0B8C1] tabular-nums">
+      <div className="mt-1.5 flex justify-between text-[13px] text-[#6B7684] tabular-nums">
         <span>{CUSTOM_MIN}%</span>
         <span>0</span>
         <span>+{CUSTOM_MAX}%</span>
@@ -1784,6 +1839,15 @@ function CustomTagForm({ onAdd }) {
         <Gavel size={16} /> 즉석 입법 후 이 사람에게 적용
       </button>
     </div>
+  );
+}
+
+function ScrollFade() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#F2F4F6] to-transparent"
+    />
   );
 }
 
@@ -1809,6 +1873,7 @@ function StepTags({
   const extras = activeRow?.extras ?? [];
   const category = CATEGORY_TABS.find((t) => t.id === categoryId) || CATEGORY_TABS[0];
   const [moreOpen, setMoreOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const tabsRef = useRef(null);
   const categoryTabsRef = useRef(null);
 
@@ -1823,7 +1888,7 @@ function StepTags({
   }, [category.id]);
 
   const weight = activeRow?.weight ?? BASE_WEIGHT;
-  const weightTone = weight > BASE_WEIGHT ? '#F04452' : weight < BASE_WEIGHT ? '#00C471' : '#191F28';
+  const weightTone = weight > BASE_WEIGHT ? '#D22030' : weight < BASE_WEIGHT ? '#00804A' : '#191F28';
   const mode = settlement?.mode;
 
   const categoryTags = category.tagIds.map((id) => PRESET_TAG_MAP[id]);
@@ -1852,84 +1917,90 @@ function StepTags({
         <h2 className="text-[26px] font-bold leading-[1.35] text-[#191F28]">
           누가 오늘
           <br />
-          <span className="text-[#F04452]">우정을 갉아먹었나요?</span>
+          <span className="text-[#D22030]">우정을 갉아먹었나요?</span>
         </h2>
-        <p className="mt-2 text-[15px] text-[#8B95A1]">해당하는 것만 콕콕 누르세요.</p>
+        <p className="mt-2 text-[15px] text-[#4E5968]">해당하는 것만 콕콕 누르세요.</p>
       </div>
 
       {/* 참가자 탭 */}
-      <div ref={tabsRef} className="tds-noscroll mt-5 px-5 flex gap-2 overflow-x-auto pb-1">
-        {people.map((p) => {
-          const row = settlement?.rows.find((r) => r.id === p.id);
-          const isActive = p.id === active.id;
-          const w = row?.weight ?? BASE_WEIGHT;
-          return (
-            <button
-              key={p.id}
-              data-pid={p.id}
-              type="button"
-              onClick={() => setActiveId(p.id)}
-              className={`shrink-0 h-12 pl-4 pr-3 rounded-full flex items-center gap-2 text-[16px] font-bold transition-all duration-200 active:scale-95 ${
-                isActive ? 'bg-[#191F28] text-white shadow-md' : 'bg-white text-[#4E5968] shadow-sm hover:bg-[#F9FAFB]'
-              }`}
-            >
-              {p.name}
-              <span
-                className={`min-w-[36px] h-6 px-1.5 rounded-full text-[12px] font-bold flex items-center justify-center tabular-nums transition-colors ${
-                  w > BASE_WEIGHT
-                    ? 'bg-[#F04452] text-white'
-                    : w < BASE_WEIGHT
-                      ? 'bg-[#00C471] text-white'
-                      : isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-[#F2F4F6] text-[#8B95A1]'
+      <div className="relative mt-5">
+        <div ref={tabsRef} className="tds-noscroll px-5 flex gap-2 overflow-x-auto pb-1">
+          {people.map((p) => {
+            const row = settlement?.rows.find((r) => r.id === p.id);
+            const isActive = p.id === active.id;
+            const w = row?.weight ?? BASE_WEIGHT;
+            return (
+              <button
+                key={p.id}
+                data-pid={p.id}
+                type="button"
+                onClick={() => setActiveId(p.id)}
+                className={`shrink-0 h-12 pl-4 pr-3 rounded-full flex items-center gap-2 text-[16px] font-bold transition-all duration-200 active:scale-95 ${
+                  isActive ? 'bg-[#191F28] text-white shadow-md' : 'bg-white text-[#4E5968] shadow-sm hover:bg-[#F9FAFB]'
                 }`}
               >
-                {w}
-              </span>
-            </button>
-          );
-        })}
+                {p.name}
+                <span
+                  className={`min-w-[36px] h-6 px-1.5 rounded-full text-[13px] font-bold flex items-center justify-center tabular-nums transition-colors ${
+                    w > BASE_WEIGHT
+                      ? 'bg-[#D22030] text-white'
+                      : w < BASE_WEIGHT
+                        ? 'bg-[#00804A] text-white'
+                        : isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-[#F2F4F6] text-[#4E5968]'
+                  }`}
+                >
+                  {w}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <ScrollFade />
       </div>
 
       {/* 카테고리 탭 (1단) */}
-      <div
-        ref={categoryTabsRef}
-        role="tablist"
-        aria-label="죄목 카테고리"
-        className="tds-noscroll mt-3 px-5 flex gap-2 overflow-x-auto pb-1"
-      >
-        {CATEGORY_TABS.map((t) => {
-          const isOn = t.id === category.id;
-          const count = t.tagIds.filter((id) => selected.includes(id)).length;
-          return (
-            <button
-              key={t.id}
-              data-category={t.id}
-              type="button"
-              role="tab"
-              aria-selected={isOn}
-              onClick={() => setCategoryId(t.id)}
-              className={`shrink-0 h-11 px-4 rounded-full flex items-center gap-1.5 text-[15px] font-bold border-2 transition-all duration-200 active:scale-95 ${
-                isOn
-                  ? 'bg-[#3182F6] border-[#3182F6] text-white shadow-sm'
-                  : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F9FAFB]'
-              }`}
-            >
-              <span aria-hidden>{t.emoji}</span>
-              {t.name}
-              {count > 0 && (
-                <span
-                  className={`tds-pop min-w-[20px] h-5 px-1 rounded-full text-[12px] font-bold flex items-center justify-center tabular-nums ${
-                    isOn ? 'bg-white text-[#3182F6]' : 'bg-[#3182F6] text-white'
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="relative mt-3">
+        <div
+          ref={categoryTabsRef}
+          role="tablist"
+          aria-label="죄목 카테고리"
+          className="tds-noscroll px-5 flex gap-2 overflow-x-auto pb-1"
+        >
+          {CATEGORY_TABS.map((t) => {
+            const isOn = t.id === category.id;
+            const count = t.tagIds.filter((id) => selected.includes(id)).length;
+            return (
+              <button
+                key={t.id}
+                data-category={t.id}
+                type="button"
+                role="tab"
+                aria-selected={isOn}
+                onClick={() => setCategoryId(t.id)}
+                className={`shrink-0 h-11 px-4 rounded-full flex items-center gap-1.5 text-[15px] font-bold border-2 transition-all duration-200 active:scale-95 ${
+                  isOn
+                    ? 'bg-[#1B64DA] border-[#1B64DA] text-white shadow-sm'
+                    : 'bg-white border-[#E5E8EB] text-[#4E5968] hover:bg-[#F9FAFB]'
+                }`}
+              >
+                <span aria-hidden>{t.emoji}</span>
+                {t.name}
+                {count > 0 && (
+                  <span
+                    className={`tds-pop min-w-[20px] h-5 px-1 rounded-full text-[13px] font-bold flex items-center justify-center tabular-nums ${
+                      isOn ? 'bg-white text-[#1B64DA]' : 'bg-[#1B64DA] text-white'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <ScrollFade />
       </div>
 
       <div key={active.id} className="px-5 mt-4 space-y-4 tds-fade-up">
@@ -1942,21 +2013,21 @@ function StepTags({
               tone={weight > BASE_WEIGHT ? 'red' : weight < BASE_WEIGHT ? 'green' : 'blue'}
             />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] text-[#8B95A1]">피고인</p>
+              <p className="text-[13px] text-[#6B7684]">피고인</p>
               <p className="text-[19px] font-bold text-[#191F28] truncate">{active.name}님</p>
             </div>
             <div className="text-right">
-              <p className="text-[13px] text-[#8B95A1]">가중치</p>
-              <p className="text-[26px] font-bold tabular-nums transition-colors" style={{ color: weightTone }}>
-                {weight}
+              <p className="text-[13px] text-[#6B7684]">1/N보다</p>
+              <p className="text-[24px] font-bold tabular-nums transition-colors" style={{ color: weightTone }}>
+                {activeRow && activeRow.diff !== 0 ? `${fmtDiff(activeRow.diff)}원` : '그대로'}
               </p>
             </div>
           </div>
           {activeRow && total > 0 && (
             <p className="mt-2 text-right text-[13px] text-[#4E5968] font-medium tabular-nums">
-              예상 부담 {fmtWon(activeRow.exact)}원
-              {activeRow.clamped && <span className="text-[#00A661]"> (하한 {mode.min})</span>}
-              {activeRow.clampedMax && <span className="text-[#F04452]"> (상한 {mode.max})</span>}
+              예상 부담 {fmtWon(activeRow.exact)}원 · 가중치 {weight}
+              {activeRow.clamped && <span className="text-[#00804A]"> (하한 {mode.min})</span>}
+              {activeRow.clampedMax && <span className="text-[#D22030]"> (상한 {mode.max})</span>}
             </p>
           )}
 
@@ -1970,7 +2041,7 @@ function StepTags({
                   title={tag.label}
                   aria-label={`${tag.label} 해제`}
                   onClick={() => toggleTag(active.id, tag.id)}
-                  className={`tds-pop max-w-full h-9 pl-3 pr-2 rounded-full flex items-center gap-1.5 text-[13px] font-semibold border transition-all active:scale-95 ${
+                  className={`tds-pop max-w-full h-11 pl-3.5 pr-2.5 rounded-full flex items-center gap-1.5 text-[13px] font-semibold border transition-all active:scale-95 ${
                     tag.delta > 0
                       ? 'bg-[#FFF2F2] border-[#FFD0D4] text-[#191F28]'
                       : 'bg-[#E8FBF2] border-[#B8EED3] text-[#191F28]'
@@ -1978,10 +2049,10 @@ function StepTags({
                 >
                   <span aria-hidden>{tag.emoji}</span>
                   <span className="truncate max-w-[140px]">{tag.label}</span>
-                  <span className="font-bold tabular-nums" style={{ color: tag.delta > 0 ? '#F04452' : '#00A661' }}>
+                  <span className="font-bold tabular-nums" style={{ color: tag.delta > 0 ? '#D22030' : '#00804A' }}>
                     {fmtPct(tag.delta)}
                   </span>
-                  <X size={15} strokeWidth={3} className="text-[#8B95A1]" aria-hidden />
+                  <X size={15} strokeWidth={3} className="text-[#6B7684]" aria-hidden />
                 </button>
               ))}
             </div>
@@ -2006,11 +2077,11 @@ function StepTags({
             <p className="text-[18px] font-bold text-[#191F28]">
               {category.emoji} {category.name}
             </p>
-            <p className="mt-0.5 text-[13px] text-[#8B95A1]">{category.desc}</p>
+            <p className="mt-0.5 text-[13px] text-[#6B7684]">{category.desc}</p>
           </div>
-          <p className="px-1 pb-2 text-[13px] font-bold text-[#F04452]">🔴 가산세</p>
+          <p className="px-1 pb-2 text-[13px] font-bold text-[#D22030]">🔴 가산세</p>
           {renderRows(categoryPenalties)}
-          <p className="px-1 pt-4 pb-2 text-[13px] font-bold text-[#00A661]">🟢 공제</p>
+          <p className="px-1 pt-4 pb-2 text-[13px] font-bold text-[#00804A]">🟢 공제</p>
           {renderRows(categoryDeductions)}
         </Card>
 
@@ -2018,7 +2089,7 @@ function StepTags({
         <Card className="p-3">
           <div className="px-1 pt-1 pb-2">
             <p className="text-[16px] font-bold text-[#191F28]">공통 추가 죄목 & 우정 할인</p>
-            <p className="mt-0.5 text-[13px] text-[#8B95A1]">새벽 전화, 증발, 생일 주인공 등</p>
+            <p className="mt-0.5 text-[13px] text-[#6B7684]">새벽 전화, 증발, 생일 주인공 등</p>
           </div>
           {visibleMoreTags.length > 0 && renderRows(visibleMoreTags)}
           {(moreOpen || hiddenMoreCount > 0) && (
@@ -2026,7 +2097,7 @@ function StepTags({
               type="button"
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen((v) => !v)}
-              className="mt-2 w-full h-12 rounded-xl flex items-center justify-center gap-1 text-[15px] font-bold text-[#3182F6] bg-[#E8F3FF] hover:bg-[#DCEBFF] active:scale-[0.98] transition-all"
+              className="mt-2 w-full h-12 rounded-xl flex items-center justify-center gap-1 text-[15px] font-bold text-[#1B64DA] bg-[#E8F3FF] hover:bg-[#DCEBFF] active:scale-[0.98] transition-all"
             >
               {moreOpen ? (
                 <>
@@ -2044,13 +2115,13 @@ function StepTags({
         {/* 커스텀 죄목 */}
         <Card className="p-3">
           <div className="px-1 pt-1 pb-2 flex items-center gap-2">
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-[#3182F6] bg-[#E8F3FF]">
+            <span className="text-[13px] font-bold px-2 py-0.5 rounded-md text-[#1B64DA] bg-[#E8F3FF]">
               즉석 입법
             </span>
             <span className="text-[16px] font-bold text-[#191F28]">직접 죄목 추가</span>
           </div>
           {customTags.length === 0 ? (
-            <p className="px-1 py-1 text-[13px] text-[#8B95A1]">목록에 없는 만행은 직접 써 주세요.</p>
+            <p className="px-1 py-1 text-[13px] text-[#6B7684]">목록에 없는 만행은 직접 써 주세요.</p>
           ) : (
             <div className="space-y-2">
               {customTags.map((tag) => (
@@ -2064,7 +2135,23 @@ function StepTags({
               ))}
             </div>
           )}
-          <CustomTagForm onAdd={(label, delta) => onAddCustomTag(active.id, label, delta)} />
+          {customOpen ? (
+            <CustomTagForm
+              onAdd={(label, delta) => {
+                const ok = onAddCustomTag(active.id, label, delta);
+                if (ok) setCustomOpen(false);
+                return ok;
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCustomOpen(true)}
+              className="mt-2 w-full h-12 rounded-xl flex items-center justify-center gap-1.5 text-[15px] font-bold text-[#1B64DA] bg-[#E8F3FF] hover:bg-[#DCEBFF] active:scale-[0.98] transition-all"
+            >
+              <PencilLine size={17} /> 직접 써서 추가하기
+            </button>
+          )}
         </Card>
 
         {/* 다음 피고인 */}
@@ -2120,16 +2207,16 @@ function StepLoading({ messages, onDone }) {
         <div className="absolute inset-0 rounded-full border-[6px] border-[#E8F3FF]" />
         <div className="absolute inset-0 rounded-full border-[6px] border-[#3182F6] border-t-transparent border-r-transparent animate-spin" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <Scale size={28} className="text-[#3182F6]" />
+          <Scale size={28} className="text-[#1B64DA]" />
         </div>
       </div>
 
-      <p className="mt-8 text-[13px] font-semibold text-[#3182F6] tracking-wide">술자리 행적 정밀 대조 중</p>
+      <p className="mt-8 text-[13px] font-semibold text-[#1B64DA] tracking-wide">술자리 행적 정밀 대조 중</p>
       <div className="mt-3 h-[108px] flex items-start justify-center">
         <p
           key={msgIdx}
           className={`tds-roll text-[18px] font-bold leading-[1.45] break-keep ${
-            isLast ? 'text-[#3182F6]' : 'text-[#191F28]'
+            isLast ? 'text-[#1B64DA]' : 'text-[#191F28]'
           }`}
         >
           {messages[msgIdx]}
@@ -2149,7 +2236,7 @@ function StepLoading({ messages, onDone }) {
           />
         ))}
       </div>
-      <p className="mt-10 text-[12px] text-[#B0B8C1]">※ 본 감사는 한 치의 인정도 없이 오직 팩트와 뒤끝으로만 진행됩니다.</p>
+      <p className="mt-10 text-[13px] text-[#6B7684]">※ 본 감사는 한 치의 인정도 없이 오직 팩트와 뒤끝으로만 진행됩니다.</p>
     </div>
   );
 }
@@ -2165,7 +2252,7 @@ function CountUpWon({ value, className = '' }) {
 
 function ReceiptItem({ row, settlement, delay }) {
   const { remainder } = settlement;
-  const diffColor = row.diff > 0 ? '#F04452' : row.diff < 0 ? '#00A661' : '#8B95A1';
+  const diffColor = row.diff > 0 ? '#D22030' : row.diff < 0 ? '#00804A' : '#6B7684';
   const diffDot = row.diff > 0 ? '🔴' : row.diff < 0 ? '🟢' : '⚪';
 
   return (
@@ -2176,21 +2263,21 @@ function ReceiptItem({ row, settlement, delay }) {
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[16px] font-bold text-[#191F28] truncate">{row.name}</span>
             {row.isVillain && settlement.hasVillain && (
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-[#F04452] text-white flex items-center gap-0.5">
+              <span className="text-[13px] font-bold px-1.5 py-0.5 rounded-md bg-[#D22030] text-white flex items-center gap-0.5">
                 <Crown size={11} /> 1등 빌런
               </span>
             )}
             {row.isVillain && !settlement.hasVillain && (
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-[#4E5968] text-white">자투리 당번</span>
+              <span className="text-[13px] font-bold px-1.5 py-0.5 rounded-md bg-[#4E5968] text-white">자투리 당번</span>
             )}
             {row.isSaint && (
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-[#00C471] text-white">😇 모범 시민</span>
+              <span className="text-[13px] font-bold px-1.5 py-0.5 rounded-md bg-[#00804A] text-white">😇 모범 시민</span>
             )}
           </div>
-          <p className="text-[12px] text-[#8B95A1] tabular-nums">
+          <p className="text-[13px] text-[#6B7684] tabular-nums">
             가중치 {row.weight}
-            {row.clampedMax && <span className="text-[#F04452]"> (상한 {settlement.mode.max})</span>}
-            {row.clamped && <span className="text-[#00A661]"> (하한 {settlement.mode.min})</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(1)}%
+            {row.clampedMax && <span className="text-[#D22030]"> (상한 {settlement.mode.max})</span>}
+            {row.clamped && <span className="text-[#00804A]"> (하한 {settlement.mode.min})</span>} · 지분 {((row.weight / settlement.totalWeight) * 100).toFixed(1)}%
           </p>
         </div>
         <div className="text-right">
@@ -2203,18 +2290,18 @@ function ReceiptItem({ row, settlement, delay }) {
 
       <div className="mt-3 ml-[52px] rounded-xl bg-[#F9FAFB] p-3 space-y-1.5 text-[13px]">
         <div className="flex justify-between gap-2">
-          <span className="text-[#8B95A1]">초정밀 팩트 청구액</span>
+          <span className="text-[#4E5968]">초정밀 팩트 청구액</span>
           <span className="font-semibold text-[#191F28] tabular-nums">{fmtWon(row.exact)}원</span>
         </div>
         <div className="flex justify-between gap-2">
-          <span className="text-[#8B95A1]">1/N 대비</span>
+          <span className="text-[#4E5968]">1/N 대비</span>
           <span className="font-semibold tabular-nums" style={{ color: diffColor }}>
             {fmtDiff(row.diff)}원 {diffDot}
           </span>
         </div>
         {row.isVillain && remainder > 0 && (
           <div className="pt-1">
-            <span className="inline-block text-[12px] font-semibold px-2 py-1 rounded-md bg-[#FFEEEE] text-[#F04452]">
+            <span className="inline-block text-[13px] font-semibold px-2 py-1 rounded-md bg-[#FFEEEE] text-[#D22030]">
               *(자투리 {fmtWon(remainder)}원 빌런 독박 포함)
             </span>
           </div>
@@ -2231,13 +2318,13 @@ function ReceiptItem({ row, settlement, delay }) {
             ))}
             {row.extras.map((e) => (
               <li key={e.key} className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-[#F04452] break-keep">{e.label}</span>
+                <span className="font-semibold text-[#D22030] break-keep">{e.label}</span>
                 {e.key !== 'hypocrisy' && <DeltaBadge delta={e.delta} size="sm" />}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="pt-1.5 mt-1.5 border-t border-dashed border-[#E5E8EB] text-[#B0B8C1]">
+          <p className="pt-1.5 mt-1.5 border-t border-dashed border-[#E5E8EB] text-[#4E5968]">
             적용된 죄목 없음 (수상할 정도로 무난함)
           </p>
         )}
@@ -2266,11 +2353,11 @@ function SettlementOptions({ settlement, courtMode, setCourtMode, roundUnit, set
       >
         <span>
           <span className="block text-[15px] font-bold text-[#191F28]">⚙️ 정산 매운맛 & 단위 조절</span>
-          <span className="block mt-0.5 text-[13px] text-[#8B95A1]">
+          <span className="block mt-0.5 text-[13px] text-[#4E5968]">
             지금: {mode.emoji} {mode.name} ({mode.short}) · {fmtWon(unit)}원 단위
           </span>
         </span>
-        <span className="shrink-0 flex items-center gap-0.5 text-[13px] font-semibold text-[#3182F6]">
+        <span className="shrink-0 flex items-center gap-0.5 text-[13px] font-semibold text-[#1B64DA]">
           {open ? '닫기' : '옵션 열기'}
           {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </span>
@@ -2297,12 +2384,12 @@ function SettlementOptions({ settlement, courtMode, setCourtMode, roundUnit, set
                       {m.emoji}
                     </span>
                     <span className="mt-1 text-[15px] font-bold">{m.name}</span>
-                    <span className="text-[12px] font-medium">{m.short}</span>
+                    <span className="text-[13px] font-medium">{m.short}</span>
                   </button>
                 );
               })}
             </div>
-            <p className="mt-2 text-[12px] text-[#8B95A1]">
+            <p className="mt-2 text-[13px] text-[#4E5968]">
               {mode.desc} · 가중치 {mode.min}~{mode.max}
             </p>
           </div>
@@ -2327,9 +2414,9 @@ function SettlementOptions({ settlement, courtMode, setCourtMode, roundUnit, set
                 );
               })}
             </div>
-            <p className="mt-2 text-[12px] text-[#8B95A1]">{unitHint[roundUnit]}</p>
+            <p className="mt-2 text-[13px] text-[#4E5968]">{unitHint[roundUnit]}</p>
             {unitFallback && (
-              <p className="mt-1 text-[12px] font-semibold text-[#F04452]">
+              <p className="mt-1 text-[13px] font-semibold text-[#D22030]">
                 총액이 작아서 10원 단위로 자동 조정했어요
               </p>
             )}
@@ -2378,13 +2465,13 @@ function StepResult({
               <span className="text-[#8EC5FF]">자투리 당번은 {villain.name}님</span>
             </h2>
           )}
-          <p className="mt-2 text-[14px] text-[#B0B8C1]">
+          <p className="mt-2 text-[14px] text-[#C9CED6]">
             (기여도 대비 가산세{' '}
-            <b className={hasVillain ? 'text-[#FF6B78]' : 'text-white'}>{fmtPct(surcharge)}</b>)
+            <b className={hasVillain ? "text-[#FF8A95]" : "text-white"}>{fmtPct(surcharge)}</b>)
           </p>
           {hasVillain && (
-            <div className="tds-stamp absolute top-5 right-4 w-[74px] h-[74px] rounded-full border-[3px] border-[#F04452] text-[#F04452] flex flex-col items-center justify-center font-black leading-none bg-[#191F28]/40">
-              <span className="text-[11px]">우정</span>
+            <div className="tds-stamp absolute top-5 right-4 w-[74px] h-[74px] rounded-full border-[3px] border-[#F04452] text-[#D22030] flex flex-col items-center justify-center font-black leading-none bg-[#191F28]/40">
+              <span className="text-[13px]">우정</span>
               <span className="text-[17px] mt-0.5">파산</span>
             </div>
           )}
@@ -2394,7 +2481,7 @@ function StepResult({
             <Scale size={16} className="text-[#4E5968]" />
           </span>
           <div>
-            <p className="text-[12px] font-semibold text-[#8B95A1]">
+            <p className="text-[13px] font-semibold text-[#6B7684]">
               총무 감사실 한줄 참교육{settlement.worstTag && hasVillain ? ` · 주요 혐의: ${settlement.worstTag.label}` : ''}
             </p>
             <p className="mt-1 text-[15px] font-medium text-[#191F28] leading-[1.55] break-keep">"{verdict}"</p>
@@ -2402,20 +2489,38 @@ function StepResult({
         </div>
       </Card>
 
+      {/* 보낼 돈 요약 */}
+      <Card className="p-5 tds-fade-up" style={{ animationDelay: '60ms' }}>
+        <h3 className="text-[17px] font-bold text-[#191F28]">💸 각자 보낼 돈</h3>
+        <ul className="mt-2 divide-y divide-[#F2F4F6]">
+          {sorted.map((row) => (
+            <li key={row.id} className="h-14 flex items-center gap-2">
+              <span className="text-[17px] font-bold text-[#191F28] truncate">{row.name}</span>
+              {row.isVillain && settlement.hasVillain && <span aria-label="1등 빌런">👑</span>}
+              {row.isSaint && <span aria-label="모범 시민">😇</span>}
+              <span className="ml-auto text-[22px] font-bold text-[#191F28] tabular-nums">
+                {fmtWon(row.pay)}
+                <span className="text-[17px]">원</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
       {/* 요약 */}
       <Card className="p-5 grid grid-cols-3 gap-2 text-center tds-fade-up" style={{ animationDelay: '80ms' }}>
         <div>
-          <p className="text-[12px] text-[#8B95A1]">총 결제액</p>
+          <p className="text-[13px] text-[#6B7684]">총 결제액</p>
           <p className="mt-1 text-[15px] font-bold text-[#191F28] tabular-nums">{fmtWon(total)}원</p>
         </div>
         <div className="border-x border-[#F2F4F6]">
-          <p className="text-[12px] text-[#8B95A1]">단순 1/N</p>
-          <p className="mt-1 text-[15px] font-bold text-[#8B95A1] tabular-nums line-through decoration-[#F04452]/70">
+          <p className="text-[13px] text-[#6B7684]">단순 1/N</p>
+          <p className="mt-1 text-[15px] font-bold text-[#6B7684] tabular-nums line-through decoration-[#F04452]/70">
             {fmtWon(base)}원
           </p>
         </div>
         <div>
-          <p className="text-[12px] text-[#8B95A1]">총 가중치</p>
+          <p className="text-[13px] text-[#6B7684]">총 가중치</p>
           <p className="mt-1 text-[15px] font-bold text-[#191F28] tabular-nums">{settlement.totalWeight}</p>
         </div>
       </Card>
@@ -2431,7 +2536,7 @@ function StepResult({
       {/* 영수증 */}
       <Card className="relative tds-fade-up" style={{ animationDelay: '140ms' }}>
         <div className="px-5 pt-5 pb-3 flex items-center gap-2">
-          <Receipt size={18} className="text-[#3182F6]" />
+          <Receipt size={18} className="text-[#1B64DA]" />
           <h3 className="text-[17px] font-bold text-[#191F28]">개인별 청구 내역서</h3>
         </div>
         <div className="px-5 divide-y divide-[#F2F4F6]">
@@ -2454,7 +2559,7 @@ function StepResult({
           </div>
           <div
             className={`flex items-center gap-1.5 text-[13px] font-medium ${
-              balanced ? 'text-[#00A661]' : 'text-[#F04452]'
+              balanced ? 'text-[#00804A]' : 'text-[#D22030]'
             }`}
           >
             <ShieldCheck size={15} />
@@ -2468,7 +2573,7 @@ function StepResult({
               {memo.trim() && <p className="text-[13px] text-[#4E5968] break-all">💬 {memo.trim()}</p>}
             </div>
           )}
-          <p className="pt-2 text-[11px] text-[#B0B8C1] leading-relaxed">
+          <p className="pt-2 text-[13px] text-[#6B7684] leading-relaxed">
             ※ 본 정산은 최종 확정 판결로 항소가 불가하며, 읽씹 시 가산세가 추가됩니다. 이의 제기 시 다음 모임 가산세 +50%가 자동 부과됩니다.
           </p>
         </div>
@@ -2477,16 +2582,16 @@ function StepResult({
       {/* 입금처 */}
       <Card className="p-5 tds-fade-up" style={{ animationDelay: '200ms' }}>
         <h3 className="text-[15px] font-bold text-[#191F28] flex items-center gap-1.5">
-          <PencilLine size={16} className="text-[#3182F6]" /> 총무 입금처 & 한마디
+          <PencilLine size={16} className="text-[#1B64DA]" /> 총무 입금처 & 한마디
         </h3>
-        <p className="mt-1 text-[13px] text-[#8B95A1]">입력하면 영수증과 복사 텍스트에 바로 반영돼요.</p>
+        <p className="mt-1 text-[13px] text-[#6B7684]">입력하면 영수증과 복사 텍스트에 바로 반영돼요.</p>
         <input
           type="text"
           value={account}
           maxLength={60}
           onChange={(e) => setAccount(e.target.value)}
           placeholder="계좌번호 또는 송금 아이디 (예: OO은행 1000-0000-0000)"
-          className="mt-3 w-full h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
+          className="mt-3 w-full h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#8B95A1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
         />
         <input
           type="text"
@@ -2494,7 +2599,7 @@ function StepResult({
           maxLength={80}
           onChange={(e) => setMemo(e.target.value)}
           placeholder="한줄 메시지 (예: 자정까지 미입금 시 연체이자 12%)"
-          className="mt-2 w-full h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#B0B8C1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
+          className="mt-2 w-full h-12 px-4 rounded-xl bg-[#F2F4F6] text-[15px] text-[#191F28] placeholder:text-[#8B95A1] outline-none focus:ring-2 focus:ring-[#3182F6]/40 transition-all"
         />
       </Card>
 
@@ -2527,7 +2632,7 @@ function ManualCopySheet({ text, onClose }) {
       <div className="tds-sheet relative w-full max-w-md bg-white rounded-t-3xl p-5 pb-[max(20px,env(safe-area-inset-bottom))]">
         <div className="mx-auto w-10 h-1 rounded-full bg-[#E5E8EB] mb-4" />
         <h3 className="text-[18px] font-bold text-[#191F28]">자동 복사가 막혀 있어요</h3>
-        <p className="mt-1 text-[14px] text-[#8B95A1]">아래 텍스트를 길게 눌러 직접 복사해 주세요.</p>
+        <p className="mt-1 text-[14px] text-[#6B7684]">아래 텍스트를 길게 눌러 직접 복사해 주세요.</p>
         <textarea
           ref={ref}
           readOnly
@@ -2608,10 +2713,16 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const showToast = useCallback((message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success', action = null) => {
     clearTimeout(toastTimer.current);
-    setToast({ message, type, key: Date.now() });
-    toastTimer.current = setTimeout(() => setToast(null), 2200);
+    if (type === 'error') haptic('error');
+    setToast({ message, type, key: Date.now(), action });
+    toastTimer.current = setTimeout(() => setToast(null), action ? 4500 : 2200);
+  }, []);
+
+  const hideToast = useCallback(() => {
+    clearTimeout(toastTimer.current);
+    setToast(null);
   }, []);
 
   /* 참가자 */
@@ -2633,7 +2744,12 @@ export default function App() {
     return true;
   };
 
+  // 만취 상태 오터치 대비: 삭제 직후 토스트에서 되돌릴 수 있게 한다
   const removePerson = (id) => {
+    const index = people.findIndex((p) => p.id === id);
+    if (index < 0) return;
+    const removed = people[index];
+    const removedSelection = selections[id];
     setPeople((prev) => prev.filter((p) => p.id !== id));
     setSelections((prev) => {
       const next = { ...prev };
@@ -2641,10 +2757,19 @@ export default function App() {
       return next;
     });
     if (activeId === id) setActiveId(null);
+    showToast(`${removed.name}님을 뺐어요`, 'success', {
+      label: '되돌리기',
+      onClick: () => {
+        setPeople((prev) => (prev.some((p) => p.id === id) ? prev : [...prev.slice(0, index), removed, ...prev.slice(index)]));
+        if (removedSelection) setSelections((prev) => ({ ...prev, [id]: removedSelection }));
+        hideToast();
+      },
+    });
   };
 
   /* 태그 */
   const toggleTag = (personId, tagId) => {
+    haptic('tickWeak');
     setSelections((prev) => {
       const cur = prev[personId] || [];
       const next = cur.includes(tagId) ? cur.filter((t) => t !== tagId) : [...cur, tagId];
@@ -2718,6 +2843,7 @@ export default function App() {
   // 로딩 화면은 기록에서 결과 화면으로 바꿔치기해, 결과에서 뒤로가기 시 로딩을 다시 보지 않고 태그 화면으로 간다
   const finishLoading = useCallback(() => {
     window.history.replaceState({ ...window.history.state, step: 4 }, '');
+    haptic('success');
     setStep(4);
   }, []);
 
@@ -2725,6 +2851,7 @@ export default function App() {
     const text = buildShareText({ total, settlement, account, memo });
     const ok = await copyToClipboard(text);
     if (ok) {
+      haptic('success');
       showToast('명세서가 복사됐어요. 단톡방에 투하하세요 💣');
     } else {
       setManualCopyText(text);
