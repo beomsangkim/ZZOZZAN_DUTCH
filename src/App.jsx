@@ -208,7 +208,7 @@ const PRESET_TAGS = [
     id: 'rant',
     emoji: '😭',
     label: '전 애인·회사 욕 30분 이상',
-    delta: 35,
+    delta: 30,
     reason: '테이블 감정 쓰레기통화 배상금',
     verdict: '그 이야기 작년부터 오늘까지 도합 14번째 들었습니다. 이제 방청객 알바비 내세요.',
     loadingTemplates: [
@@ -220,7 +220,7 @@ const PRESET_TAGS = [
     id: 'run',
     emoji: '🚽',
     label: '계산할 때 화장실·막차 도망',
-    delta: 30,
+    delta: 35,
     reason: '포스기 회피 기동 및 얌체 귀가',
     verdict: '계산서 빌지가 테이블에 올라오는 순간 방광이 반응하는 과학적 신비를 목격했습니다.',
     loadingTemplates: [
@@ -1071,17 +1071,18 @@ function computeAutoPenalties(tags) {
   const deductionSum = tags.filter((t) => t.delta < 0).reduce((s, t) => s + t.delta, 0);
   const extras = [];
 
+  const combos = COMBO_RULES.filter(({ groups: [first, second] }) =>
+    penaltyTags.some(
+      (x) => matchesComboGroup(x, first) && penaltyTags.some((y) => y.id !== x.id && matchesComboGroup(y, second))
+    )
+  );
+
+  // 죄목이 딱 2건이고 그 둘이 콤보라면 같은 두 죄목을 두 번 처벌하지 않도록 재범 가중처벌은 생략
   const progressive = PROGRESSIVE_RULES.find((rule) => penaltyTags.length >= rule.min);
-  if (progressive) {
+  if (progressive && !(progressive.min === 2 && combos.length > 0)) {
     extras.push({ key: 'progressive', label: progressive.label(penaltyTags.length), delta: progressive.delta, amplify: true });
   }
-
-  COMBO_RULES.forEach(({ id, label, delta, groups: [first, second] }) => {
-    const hit = penaltyTags.some(
-      (x) => matchesComboGroup(x, first) && penaltyTags.some((y) => y.id !== x.id && matchesComboGroup(y, second))
-    );
-    if (hit) extras.push({ key: id, label, delta, amplify: true });
-  });
+  combos.forEach(({ id, label, delta }) => extras.push({ key: id, label, delta, amplify: true }));
 
   // 차량·자취방처럼 실제 돈이 든 공제(realCost)는 '세탁'이 아니므로 삭감하지 않는다
   const launderable = tags.filter((t) => t.delta < 0 && !t.realCost).reduce((s, t) => s + t.delta, 0);
@@ -2362,6 +2363,19 @@ function SettlementOptions({ settlement, courtMode, setCourtMode, roundUnit, set
           {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </span>
       </button>
+
+      {courtMode !== 'peace' && (
+        <div className="px-5 pb-4 -mt-1">
+          <button
+            type="button"
+            onClick={() => setCourtMode('peace')}
+            className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-[#F2F4F6] text-left text-[13px] font-semibold text-[#4E5968] active:scale-[0.98] transition-transform"
+          >
+            💡 진짜 송금이라면? <span className="text-[#1B64DA]">🕊️ 평화 모드로 바꾸기 →</span>
+            <span className="block mt-0.5 font-medium text-[#6B7684]">차이를 커피 한 잔 값 정도로 줄여 줘요</span>
+          </button>
+        </div>
+      )}
 
       {open && (
         <div className="tds-fade-up px-5 pb-5 space-y-5">
